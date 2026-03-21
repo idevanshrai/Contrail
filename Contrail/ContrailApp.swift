@@ -2,10 +2,9 @@
 //  ContrailApp.swift
 //  Contrail
 //
-//  Created by Devansh Rai on 21/3/26.
-//
 
 import SwiftUI
+import SwiftData
 
 @main
 struct ContrailApp: App {
@@ -13,5 +12,8 @@ struct ContrailApp: App {
         WindowGroup {
             ContentView()
         }
+        .modelContainer(for: Session.self)
+        .windowStyle(.automatic)
+        .defaultSize(width: 900, height: 640)
     }
 }
