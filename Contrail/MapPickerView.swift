@@ -223,6 +223,7 @@ struct MapPickerView: View {
             }
         }
         .buttonStyle(.plain)
+        .hoverGlow(isSelected ? ContrailTheme.glowAmber : ContrailTheme.contrailWhite, radius: 6)
     }
 
     // MARK: - Destination Card

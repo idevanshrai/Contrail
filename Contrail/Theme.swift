@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import AppKit
 
 /// Central design system for the Contrail app.
 /// Near-black nocturnal palette inspired by FocusFlights — evoking night flight at altitude.
@@ -37,6 +38,9 @@ enum ContrailTheme {
 
     /// Success / arrived green
     static let arrivedGreen = Color(red: 0.30, green: 0.82, blue: 0.55)
+
+    /// Danger / destructive red
+    static let dangerRed = Color(red: 0.95, green: 0.30, blue: 0.30)
 
     // MARK: - Gradients
 
@@ -75,25 +79,12 @@ enum ContrailTheme {
 
     // MARK: - Typography
 
-    /// Large title font
     static let titleFont = Font.system(size: 28, weight: .bold, design: .rounded)
-
-    /// Section heading
     static let headingFont = Font.system(size: 18, weight: .semibold, design: .rounded)
-
-    /// Body text
     static let bodyFont = Font.system(size: 14, weight: .regular, design: .default)
-
-    /// Caption / label
     static let captionFont = Font.system(size: 12, weight: .medium, design: .default)
-
-    /// Countdown timer display — large ultralight
     static let countdownFont = Font.system(size: 72, weight: .ultraLight, design: .monospaced)
-
-    /// Greeting city name — bold large
     static let cityFont = Font.system(size: 32, weight: .bold, design: .default)
-
-    /// Greeting subtitle
     static let greetingFont = Font.system(size: 16, weight: .regular, design: .default)
 
     // MARK: - Helpers
@@ -108,9 +99,14 @@ enum ContrailTheme {
         default:      return "Good night!"
         }
     }
+
+    /// Trigger macOS haptic feedback
+    static func haptic(_ pattern: NSHapticFeedbackManager.FeedbackPattern = .generic) {
+        NSHapticFeedbackManager.defaultPerformer.perform(pattern, performanceTime: .now)
+    }
 }
 
-// MARK: - Card Modifier (Glassmorphic)
+// MARK: - Card Modifiers
 
 struct GlassCardModifier: ViewModifier {
     var cornerRadius: CGFloat = 14
@@ -144,6 +140,28 @@ struct CardModifier: ViewModifier {
     }
 }
 
+// MARK: - Hover Glow Modifier
+
+struct HoverGlowModifier: ViewModifier {
+    var glowColor: Color = ContrailTheme.skyBlue
+    var radius: CGFloat = 8
+
+    @State private var isHovered = false
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(isHovered ? 1.05 : 1.0)
+            .shadow(color: isHovered ? glowColor.opacity(0.4) : .clear, radius: radius)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isHovered)
+            .onHover { hovering in
+                isHovered = hovering
+                if hovering {
+                    ContrailTheme.haptic(.alignment)
+                }
+            }
+    }
+}
+
 extension View {
     func contrailCard() -> some View {
         modifier(CardModifier())
@@ -151,5 +169,9 @@ extension View {
 
     func glassCard(cornerRadius: CGFloat = 14, borderOpacity: Double = 0.08) -> some View {
         modifier(GlassCardModifier(cornerRadius: cornerRadius, borderOpacity: borderOpacity))
+    }
+
+    func hoverGlow(_ color: Color = ContrailTheme.skyBlue, radius: CGFloat = 8) -> some View {
+        modifier(HoverGlowModifier(glowColor: color, radius: radius))
     }
 }

@@ -30,6 +30,7 @@ struct ContentView: View {
 
     @State private var selection: Destination? = .journey
     @State private var activeSession: ActiveSessionInfo?
+    @State private var showingBoarding = false
 
     /// Persists the last airport IATA code. Defaults to Berlin (BER) on first launch.
     @AppStorage("lastAirportIATA") private var lastAirportIATA: String = "BER"
@@ -155,8 +156,14 @@ struct ContentView: View {
     private var detailView: some View {
         switch selection {
         case .journey, .none:
-            if activeSession != nil {
-                // If there's an active session, show timer
+            if showingBoarding, let info = activeSession {
+                BoardingView(sessionInfo: info) {
+                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                        showingBoarding = false
+                        selection = .inProgress
+                    }
+                }
+            } else if activeSession != nil {
                 timerDetail
             } else {
                 MapPickerView(
@@ -165,7 +172,7 @@ struct ContentView: View {
                 ) { info in
                     withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                         activeSession = info
-                        selection = .inProgress
+                        showingBoarding = true
                     }
                 }
             }
