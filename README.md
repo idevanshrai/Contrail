@@ -1,5 +1,3 @@
-<![CDATA[<div align="center">
-
 # ✈️ Contrail
 
 **A focus timer disguised as a flight simulator.**
@@ -41,12 +39,6 @@ The app calculates real great-circle distances and flight durations between 6,00
 | 🗺️ **Map Style Picker** | Choose between Standard, Satellite, or Hybrid map views |
 | 🔊 **Ambient Sound** | Optional cabin ambience during focus sessions |
 | 💾 **Persistent Data** | All sessions saved via SwiftData — your flight log survives app restarts |
-
----
-
-## 🖥️ Screenshots
-
-> Run the app to experience the full UI — the dark globe map, greeting header, glassmorphic controls, and immersive timer view.
 
 ---
 
@@ -173,5 +165,3 @@ This project is open source. Feel free to fork, modify, and use it for your own 
 
 *Stay focused. Fly farther.* ✈️
 
-</div>
-]]>
