@@ -6,7 +6,7 @@
 import SwiftUI
 import SwiftData
 
-/// The active focus session screen — countdown, animated airplane, and ambient sound controls.
+/// The active focus session screen — immersive nocturnal countdown with boarding-pass header.
 struct TimerView: View {
 
     let sessionInfo: ActiveSessionInfo
@@ -46,28 +46,40 @@ struct TimerView: View {
 
     var body: some View {
         ZStack {
+            // Nocturnal gradient background
             ContrailTheme.skyGradient.ignoresSafeArea()
 
             // Subtle stars
             StarsView()
 
+            // Ambient glow behind countdown
+            ContrailTheme.ambientGlow
+                .opacity(0.4)
+                .ignoresSafeArea()
+
             VStack(spacing: 0) {
-                routeHeader
-                    .padding(.top, 30)
+                // Boarding pass header
+                boardingPassHeader
+                    .padding(.top, 32)
+                    .padding(.horizontal, 40)
 
                 Spacer()
 
+                // Countdown
                 countdownDisplay
                 phaseLabel
+                    .padding(.top, 8)
 
                 Spacer()
 
+                // Flight progress
                 flightProgressBar
-                    .padding(.horizontal, 40)
-                    .padding(.bottom, 30)
+                    .padding(.horizontal, 50)
+                    .padding(.bottom, 36)
 
+                // Controls
                 controlBar
-                    .padding(.bottom, 30)
+                    .padding(.bottom, 36)
             }
             .padding()
         }
@@ -75,37 +87,81 @@ struct TimerView: View {
         .onDisappear { cleanup() }
     }
 
-    // MARK: - Route Header
+    // MARK: - Boarding Pass Header
 
-    private var routeHeader: some View {
-        HStack(spacing: 20) {
+    private var boardingPassHeader: some View {
+        HStack(spacing: 0) {
+            // Departure
             VStack(spacing: 4) {
                 Text(sessionInfo.departure.iataCode)
-                    .font(.system(size: 24, weight: .bold, design: .monospaced))
+                    .font(.system(size: 28, weight: .bold, design: .monospaced))
                     .foregroundStyle(ContrailTheme.contrailWhite)
                 Text(sessionInfo.departure.municipality)
-                    .font(ContrailTheme.captionFont)
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(ContrailTheme.mutedText)
             }
 
-            VStack(spacing: 4) {
-                Image(systemName: "airplane")
-                    .font(.system(size: 14))
-                    .foregroundStyle(ContrailTheme.skyBlue.opacity(0.7))
+            Spacer()
+
+            // Flight path indicator
+            VStack(spacing: 6) {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(ContrailTheme.skyBlue)
+                        .frame(width: 6, height: 6)
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                colors: [ContrailTheme.skyBlue, ContrailTheme.glowAmber],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(height: 1.5)
+                    Image(systemName: "airplane")
+                        .font(.system(size: 12))
+                        .foregroundStyle(ContrailTheme.glowAmber)
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                colors: [ContrailTheme.glowAmber, ContrailTheme.glowAmber.opacity(0.3)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(height: 1.5)
+                    Circle()
+                        .stroke(ContrailTheme.glowAmber.opacity(0.5), lineWidth: 1.5)
+                        .frame(width: 6, height: 6)
+                }
+
                 Text(FlightCalculator.formattedDuration(totalDuration))
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundStyle(ContrailTheme.mutedText)
             }
+            .frame(maxWidth: 180)
 
+            Spacer()
+
+            // Destination
             VStack(spacing: 4) {
                 Text(sessionInfo.destination.iataCode)
-                    .font(.system(size: 24, weight: .bold, design: .monospaced))
+                    .font(.system(size: 28, weight: .bold, design: .monospaced))
                     .foregroundStyle(ContrailTheme.contrailWhite)
                 Text(sessionInfo.destination.municipality)
-                    .font(ContrailTheme.captionFont)
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(ContrailTheme.mutedText)
             }
         }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 20)
+        .background(.ultraThinMaterial.opacity(0.3))
+        .background(ContrailTheme.surfaceNavy.opacity(0.4))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(ContrailTheme.contrailWhite.opacity(0.06), lineWidth: 1)
+        )
     }
 
     // MARK: - Countdown
@@ -114,18 +170,19 @@ struct TimerView: View {
         Text(FlightCalculator.countdownString(remainingTime))
             .font(ContrailTheme.countdownFont)
             .foregroundStyle(ContrailTheme.contrailWhite)
+            .shadow(color: ContrailTheme.skyBlue.opacity(0.2), radius: 20)
             .contentTransition(.numericText())
             .animation(.linear(duration: 0.1), value: remainingTime)
-            .padding(.bottom, 8)
     }
 
     private var phaseLabel: some View {
         Text(flightPhase.label)
-            .font(.system(size: 14, weight: .medium, design: .rounded))
+            .font(.system(size: 13, weight: .medium, design: .rounded))
             .foregroundStyle(flightPhase.color)
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
-            .background(flightPhase.color.opacity(0.12))
+            .background(.ultraThinMaterial.opacity(0.3))
+            .background(flightPhase.color.opacity(0.08))
             .clipShape(Capsule())
             .animation(.easeInOut(duration: 0.5), value: flightPhase)
     }
@@ -133,37 +190,44 @@ struct TimerView: View {
     // MARK: - Progress Bar
 
     private var flightProgressBar: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 14) {
             ZStack(alignment: .leading) {
                 // Track
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(ContrailTheme.contrailWhite.opacity(0.1))
-                    .frame(height: 4)
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(ContrailTheme.contrailWhite.opacity(0.08))
+                    .frame(height: 3)
 
-                // Contrail (filled portion)
+                // Amber contrail (filled)
                 GeometryReader { geo in
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(ContrailTheme.contrailGradient)
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(
+                            LinearGradient(
+                                colors: [ContrailTheme.skyBlue, ContrailTheme.glowAmber],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
                         .frame(width: max(0, geo.size.width * progress))
+                        .shadow(color: ContrailTheme.glowAmber.opacity(0.4), radius: 4)
                         .animation(.linear(duration: 1), value: progress)
                 }
-                .frame(height: 4)
+                .frame(height: 3)
 
                 // Airplane icon
                 GeometryReader { geo in
                     Image(systemName: "airplane")
-                        .font(.system(size: 20, weight: .medium))
+                        .font(.system(size: 18, weight: .medium))
                         .foregroundStyle(ContrailTheme.contrailWhite)
-                        .rotationEffect(.degrees(0))
-                        .offset(x: max(0, min(geo.size.width * progress - 10, geo.size.width - 20)))
+                        .shadow(color: ContrailTheme.contrailWhite.opacity(0.4), radius: 6)
+                        .offset(x: max(0, min(geo.size.width * progress - 9, geo.size.width - 18)))
                         .animation(.linear(duration: 1), value: progress)
                 }
-                .frame(height: 24)
+                .frame(height: 22)
                 .offset(y: -10)
             }
-            .frame(height: 24)
+            .frame(height: 22)
 
-            // Departure / Destination labels
+            // Labels
             HStack {
                 Text(sessionInfo.departure.iataCode)
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
@@ -179,57 +243,55 @@ struct TimerView: View {
     // MARK: - Controls
 
     private var controlBar: some View {
-        HStack(spacing: 24) {
+        HStack(spacing: 20) {
             // Sound toggle
-            Button {
+            controlButton(
+                icon: soundManager.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
+                color: ContrailTheme.mutedText
+            ) {
                 soundManager.toggleMute()
-            } label: {
-                Image(systemName: soundManager.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                    .font(.system(size: 16))
-                    .foregroundStyle(ContrailTheme.mutedText)
-                    .frame(width: 44, height: 44)
-                    .background(ContrailTheme.surfaceNavy.opacity(0.5))
-                    .clipShape(Circle())
             }
-            .buttonStyle(.plain)
 
             // Pause / Resume
             if !isComplete {
                 Button {
-                    if isPaused {
-                        resumeTimer()
-                    } else {
-                        pauseTimer()
-                    }
+                    if isPaused { resumeTimer() } else { pauseTimer() }
                 } label: {
                     Image(systemName: isPaused ? "play.fill" : "pause.fill")
                         .font(.system(size: 20))
-                        .foregroundStyle(ContrailTheme.contrailWhite)
+                        .foregroundStyle(ContrailTheme.darkNavy)
                         .frame(width: 56, height: 56)
-                        .background(ContrailTheme.skyBlue)
+                        .background(ContrailTheme.contrailWhite)
                         .clipShape(Circle())
-                        .shadow(color: ContrailTheme.skyBlue.opacity(0.4), radius: 8, y: 2)
+                        .shadow(color: ContrailTheme.contrailWhite.opacity(0.3), radius: 12, y: 2)
                 }
                 .buttonStyle(.plain)
             }
 
-            // End flight / Return
-            Button {
-                if isComplete {
-                    onComplete()
-                } else {
-                    endSession()
-                }
-            } label: {
-                Image(systemName: isComplete ? "arrow.right.circle.fill" : "xmark")
-                    .font(.system(size: 16))
-                    .foregroundStyle(isComplete ? ContrailTheme.arrivedGreen : ContrailTheme.mutedText)
-                    .frame(width: 44, height: 44)
-                    .background(ContrailTheme.surfaceNavy.opacity(0.5))
-                    .clipShape(Circle())
+            // End / Return
+            controlButton(
+                icon: isComplete ? "checkmark.circle.fill" : "xmark",
+                color: isComplete ? ContrailTheme.arrivedGreen : ContrailTheme.mutedText
+            ) {
+                if isComplete { onComplete() } else { endSession() }
             }
-            .buttonStyle(.plain)
         }
+    }
+
+    private func controlButton(icon: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 16))
+                .foregroundStyle(color)
+                .frame(width: 44, height: 44)
+                .background(.ultraThinMaterial.opacity(0.3))
+                .background(ContrailTheme.surfaceNavy.opacity(0.5))
+                .clipShape(Circle())
+                .overlay(
+                    Circle().stroke(ContrailTheme.contrailWhite.opacity(0.06), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Timer Logic
@@ -271,7 +333,6 @@ struct TimerView: View {
         soundManager.stop()
         remainingTime = 0
 
-        // Save to SwiftData
         let session = Session(
             departureCode: sessionInfo.departure.iataCode,
             departureName: sessionInfo.departure.name,
@@ -311,10 +372,10 @@ enum FlightPhase: String, Equatable {
 
     var color: Color {
         switch self {
-        case .boarding: return ContrailTheme.sunsetGold
+        case .boarding: return ContrailTheme.glowAmber
         case .takeoff:  return ContrailTheme.skyBlue
         case .cruising: return ContrailTheme.contrailWhite
-        case .landing:  return ContrailTheme.sunsetGold
+        case .landing:  return ContrailTheme.glowAmber
         case .arrived:  return ContrailTheme.arrivedGreen
         }
     }
@@ -323,17 +384,16 @@ enum FlightPhase: String, Equatable {
 // MARK: - Stars Background
 
 struct StarsView: View {
-    @State private var opacity: Double = 0.3
+    @State private var opacity: Double = 0.2
 
     var body: some View {
         Canvas { context, size in
-            // Use a seeded generator for consistent star positions
             var rng = SeededRandomNumberGenerator(seed: 42)
-            for _ in 0..<60 {
+            for _ in 0..<80 {
                 let x = Double.random(in: 0...size.width, using: &rng)
                 let y = Double.random(in: 0...size.height, using: &rng)
-                let radius = Double.random(in: 0.5...1.5, using: &rng)
-                let starOpacity = Double.random(in: 0.2...0.7, using: &rng)
+                let radius = Double.random(in: 0.3...1.2, using: &rng)
+                let starOpacity = Double.random(in: 0.15...0.6, using: &rng)
 
                 context.opacity = starOpacity * opacity
                 let rect = CGRect(x: x, y: y, width: radius * 2, height: radius * 2)
@@ -341,8 +401,8 @@ struct StarsView: View {
             }
         }
         .onAppear {
-            withAnimation(.easeInOut(duration: 3).repeatForever(autoreverses: true)) {
-                opacity = 0.8
+            withAnimation(.easeInOut(duration: 4).repeatForever(autoreverses: true)) {
+                opacity = 0.6
             }
         }
     }

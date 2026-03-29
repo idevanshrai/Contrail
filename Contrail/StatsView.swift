@@ -6,7 +6,7 @@
 import SwiftUI
 import SwiftData
 
-/// Shows session history, total focus time, and current streak.
+/// Flight history — session log with glassmorphic cards in the nocturnal theme.
 struct StatsView: View {
 
     @Query(sort: \Session.date, order: .reverse) private var sessions: [Session]
@@ -32,18 +32,19 @@ struct StatsView: View {
 
     private var headerSection: some View {
         VStack(spacing: 8) {
-            Image(systemName: "chart.bar.fill")
+            Image(systemName: "clock.arrow.circlepath")
                 .font(.system(size: 36, weight: .light))
                 .foregroundStyle(ContrailTheme.skyBlue)
 
-            Text("Flight Log")
+            Text("History")
                 .font(ContrailTheme.titleFont)
                 .foregroundStyle(ContrailTheme.contrailWhite)
 
-            Text("Your focus journey at a glance")
+            Text("Your flight log at a glance")
                 .font(ContrailTheme.bodyFont)
                 .foregroundStyle(ContrailTheme.mutedText)
         }
+        .padding(.top, 20)
     }
 
     // MARK: - Stats Cards
@@ -61,7 +62,7 @@ struct StatsView: View {
                 title: "Focus Time",
                 value: totalFocusTime,
                 icon: "timer",
-                color: ContrailTheme.sunsetGold
+                color: ContrailTheme.glowAmber
             )
 
             statCard(
@@ -74,13 +75,13 @@ struct StatsView: View {
     }
 
     private func statCard(title: String, value: String, icon: String, color: Color) -> some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             Image(systemName: icon)
-                .font(.system(size: 22))
+                .font(.system(size: 20))
                 .foregroundStyle(color)
 
             Text(value)
-                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .font(.system(size: 26, weight: .bold, design: .rounded))
                 .foregroundStyle(ContrailTheme.contrailWhite)
 
             Text(title)
@@ -88,26 +89,27 @@ struct StatsView: View {
                 .foregroundStyle(ContrailTheme.mutedText)
         }
         .frame(maxWidth: .infinity)
-        .contrailCard()
+        .glassCard()
     }
 
     // MARK: - History
 
     private var historySection: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 14) {
             Text("Recent Flights")
-                .font(ContrailTheme.headingFont)
-                .foregroundStyle(ContrailTheme.contrailWhite)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(ContrailTheme.mutedText)
+                .textCase(.uppercase)
+                .tracking(1)
 
             if sessions.isEmpty {
                 emptyState
             } else {
-                VStack(spacing: 1) {
+                VStack(spacing: 8) {
                     ForEach(sessions) { session in
                         sessionRow(session)
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
         }
     }
@@ -116,17 +118,17 @@ struct StatsView: View {
         VStack(spacing: 12) {
             Image(systemName: "airplane.circle")
                 .font(.system(size: 40))
-                .foregroundStyle(ContrailTheme.mutedText.opacity(0.5))
+                .foregroundStyle(ContrailTheme.mutedText.opacity(0.4))
             Text("No flights yet")
                 .font(ContrailTheme.bodyFont)
                 .foregroundStyle(ContrailTheme.mutedText)
             Text("Complete your first focus session to leave a contrail")
                 .font(ContrailTheme.captionFont)
-                .foregroundStyle(ContrailTheme.mutedText.opacity(0.7))
+                .foregroundStyle(ContrailTheme.mutedText.opacity(0.6))
         }
         .frame(maxWidth: .infinity)
         .padding(40)
-        .contrailCard()
+        .glassCard()
     }
 
     private func sessionRow(_ session: Session) -> some View {
@@ -137,15 +139,15 @@ struct StatsView: View {
                     .font(.system(size: 14, weight: .bold, design: .monospaced))
                     .foregroundStyle(ContrailTheme.contrailWhite)
 
-                Image(systemName: "arrow.right")
-                    .font(.system(size: 10))
-                    .foregroundStyle(ContrailTheme.mutedText)
+                Image(systemName: "airplane")
+                    .font(.system(size: 9))
+                    .foregroundStyle(ContrailTheme.glowAmber)
 
                 Text(session.destinationCode)
                     .font(.system(size: 14, weight: .bold, design: .monospaced))
                     .foregroundStyle(ContrailTheme.contrailWhite)
             }
-            .frame(width: 120, alignment: .leading)
+            .frame(width: 130, alignment: .leading)
 
             // Duration
             Text(FlightCalculator.formattedDuration(session.duration))
@@ -159,9 +161,15 @@ struct StatsView: View {
                 .font(.system(size: 12))
                 .foregroundStyle(ContrailTheme.mutedText)
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, 18)
         .padding(.vertical, 14)
-        .background(ContrailTheme.surfaceNavy)
+        .background(.ultraThinMaterial.opacity(0.3))
+        .background(ContrailTheme.surfaceNavy.opacity(0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(ContrailTheme.contrailWhite.opacity(0.04), lineWidth: 1)
+        )
     }
 
     // MARK: - Computed Stats
@@ -171,18 +179,15 @@ struct StatsView: View {
         return FlightCalculator.formattedDuration(total)
     }
 
-    /// Calculates the current daily streak (consecutive days with at least one session).
     private var currentStreak: Int {
         guard !sessions.isEmpty else { return 0 }
 
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: .now)
 
-        // Get unique session dates (start of day)
         let sessionDays = Set(sessions.map { calendar.startOfDay(for: $0.date) })
             .sorted(by: >)
 
-        // Check if the streak is active (today or yesterday has a session)
         guard let mostRecent = sessionDays.first,
               calendar.dateComponents([.day], from: mostRecent, to: today).day! <= 1 else {
             return 0

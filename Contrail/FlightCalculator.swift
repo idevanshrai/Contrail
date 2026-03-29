@@ -41,6 +41,27 @@ enum FlightCalculator {
         return hours * 3600  // convert to seconds
     }
 
+    /// Returns the maximum reachable distance in kilometres for a given focus duration.
+    static func reachableRadiusKm(forDuration duration: TimeInterval) -> Double {
+        let hours = duration / 3600.0
+        return cruisingSpeedKmH * hours
+    }
+
+    /// Returns the great-circle distance in km between two coordinate pairs.
+    static func haversineDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double) -> Double {
+        let la1 = lat1.radians, lo1 = lon1.radians
+        let la2 = lat2.radians, lo2 = lon2.radians
+
+        let dLat = la2 - la1
+        let dLon = lo2 - lo1
+
+        let a = sin(dLat / 2) * sin(dLat / 2)
+            + cos(la1) * cos(la2) * sin(dLon / 2) * sin(dLon / 2)
+        let c = 2 * atan2(sqrt(a), sqrt(1 - a))
+
+        return earthRadiusKm * c
+    }
+
     /// Formats a `TimeInterval` into a human-readable string, e.g. "2h 35m".
     static func formattedDuration(_ interval: TimeInterval) -> String {
         let totalSeconds = Int(interval)

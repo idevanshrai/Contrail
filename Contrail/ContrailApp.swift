@@ -13,7 +13,7 @@ struct ContrailApp: App {
             ContentView()
         }
         .modelContainer(for: Session.self)
-        .windowStyle(.automatic)
-        .defaultSize(width: 900, height: 640)
+        .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 1000, height: 700)
     }
 }

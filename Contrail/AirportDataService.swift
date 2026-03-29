@@ -19,6 +19,33 @@ final class AirportDataService: ObservableObject {
         loadAirports()
     }
 
+    // MARK: - Lookup
+
+    /// Returns the airport matching the given IATA code, or nil.
+    func airportByIATA(_ code: String) -> Airport? {
+        airports.first { $0.iataCode.uppercased() == code.uppercased() }
+    }
+
+    // MARK: - Reachability
+
+    /// Returns airports reachable from `origin` within `maxDuration` seconds,
+    /// sorted by flight duration ascending.
+    func airportsReachable(from origin: Airport, within maxDuration: TimeInterval) -> [Airport] {
+        let maxRadiusKm = FlightCalculator.reachableRadiusKm(forDuration: maxDuration)
+
+        return airports.compactMap { airport in
+            guard airport.id != origin.id else { return nil as (Airport, Double)? }
+            let dist = FlightCalculator.haversineDistance(
+                lat1: origin.latitude, lon1: origin.longitude,
+                lat2: airport.latitude, lon2: airport.longitude
+            )
+            guard dist <= maxRadiusKm, dist > 50 else { return nil }  // skip very close airports
+            return (airport, dist)
+        }
+        .sorted { $0.1 < $1.1 }
+        .map(\.0)
+    }
+
     // MARK: - Search
 
     /// Returns airports matching the query against IATA code, name, municipality, or country.
