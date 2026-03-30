@@ -6,8 +6,8 @@
 import SwiftUI
 import MapKit
 
-/// Interactive globe-style destination selector inspired by FocusFlights.
-/// Greeting header + dark map + airport carousel + time slider + "Start Journey" button.
+/// Interactive globe-style destination selector.
+/// Greeting → dark map → black/yellow airport carousel → time slider → "Book My Flight".
 struct MapPickerView: View {
 
     let departure: Airport
@@ -28,20 +28,16 @@ struct MapPickerView: View {
         airportService.airportsReachable(from: departure, within: focusDuration)
     }
 
-    /// Map pins — capped at 200 for performance, but the carousel shows all.
+    /// Map pins — capped at 250 for performance, carousel shows all.
     private var mapPinAirports: [Airport] {
-        Array(reachableAirports.prefix(200))
+        Array(reachableAirports.prefix(250))
     }
 
-    /// Resolve the map style from AppStorage string
     private var mapStyle: MapStyle {
         switch preferredMapStyle {
-        case "standard":
-            return .standard(pointsOfInterest: .excludingAll)
-        case "hybrid":
-            return .hybrid(pointsOfInterest: .excludingAll)
-        default: // "imagery"
-            return .imagery(elevation: .realistic)
+        case "standard": return .standard(pointsOfInterest: .excludingAll)
+        case "hybrid":   return .hybrid(pointsOfInterest: .excludingAll)
+        default:         return .imagery(elevation: .realistic)
         }
     }
 
@@ -49,43 +45,35 @@ struct MapPickerView: View {
         ZStack {
             ContrailTheme.darkNavy.ignoresSafeArea()
 
-            // Map fills entire view
-            mapView
-                .ignoresSafeArea()
+            mapView.ignoresSafeArea()
 
-            // Overlay content
+            // Overlays
             VStack(spacing: 0) {
-                // Greeting header
+                // Greeting
                 greetingHeader
                     .padding(.top, 20)
                     .padding(.horizontal, 28)
 
                 Spacer()
 
-                // Bottom controls overlay
                 VStack(spacing: 12) {
+                    // Time tick ruler
+                    timeRuler
+                        .padding(.horizontal, 4)
+
                     // Airport carousel
                     airportCarousel
 
-                    // Time slider bar
-                    timeSliderBar
-                        .padding(.horizontal, 24)
-
-                    // Start Journey button
-                    startJourneyButton
+                    // Book button
+                    bookFlightButton
                         .padding(.horizontal, 24)
                 }
                 .padding(.bottom, 24)
             }
         }
-        .onAppear {
-            updateCamera()
-        }
+        .onAppear { updateCamera() }
         .onChange(of: focusMinutes) { _, _ in
-            withAnimation(.easeInOut(duration: 0.5)) {
-                updateCamera()
-            }
-            // Clear selection if airport no longer reachable
+            withAnimation(.easeInOut(duration: 0.5)) { updateCamera() }
             if let selected = selectedAirport {
                 let dur = FlightCalculator.flightDuration(from: departure, to: selected)
                 if dur > focusDuration {
@@ -114,7 +102,6 @@ struct MapPickerView: View {
                 Text(ContrailTheme.greeting)
                     .font(ContrailTheme.greetingFont)
                     .foregroundStyle(ContrailTheme.contrailWhite.opacity(0.7))
-
                 Text(departure.municipality.isEmpty ? departure.name : departure.municipality)
                     .font(ContrailTheme.cityFont)
                     .foregroundStyle(ContrailTheme.contrailWhite)
@@ -123,11 +110,10 @@ struct MapPickerView: View {
 
             Spacer()
 
-            // Reachable destinations badge
             VStack(alignment: .trailing, spacing: 4) {
                 Text("\(reachableAirports.count)")
                     .font(.system(size: 24, weight: .bold, design: .rounded))
-                    .foregroundStyle(ContrailTheme.skyBlue)
+                    .foregroundStyle(ContrailTheme.glowAmber)
                     .contentTransition(.numericText())
                     .animation(.easeInOut(duration: 0.2), value: reachableAirports.count)
                 Text("destinations")
@@ -146,84 +132,106 @@ struct MapPickerView: View {
 
     private var mapView: some View {
         Map(position: $cameraPosition) {
-            // Departure pin
             Annotation(departure.iataCode, coordinate: CLLocationCoordinate2D(
                 latitude: departure.latitude, longitude: departure.longitude
-            )) {
-                departurePinView
-            }
+            )) { departurePinView }
 
-            // Reachability circle
             MapCircle(
                 center: CLLocationCoordinate2D(latitude: departure.latitude, longitude: departure.longitude),
                 radius: radiusMeters
             )
-            .foregroundStyle(ContrailTheme.glowAmber.opacity(0.05))
-            .stroke(ContrailTheme.glowAmber.opacity(0.25), lineWidth: 1.5)
+            .foregroundStyle(ContrailTheme.glowAmber.opacity(0.04))
+            .stroke(ContrailTheme.glowAmber.opacity(0.2), lineWidth: 1.5)
 
-            // Destination pins (capped for perf, but visible on map)
             ForEach(mapPinAirports) { airport in
                 Annotation("", coordinate: CLLocationCoordinate2D(
                     latitude: airport.latitude, longitude: airport.longitude
-                )) {
-                    destinationPinView(for: airport)
-                }
+                )) { mapDotView(for: airport) }
             }
         }
         .mapStyle(mapStyle)
-        .mapControls {
-            MapZoomStepper()
-        }
+        .mapControls { MapZoomStepper() }
     }
 
     private var departurePinView: some View {
         ZStack {
-            Circle()
-                .stroke(ContrailTheme.skyBlue.opacity(0.3), lineWidth: 2)
-                .frame(width: 40, height: 40)
-
-            Circle()
-                .fill(ContrailTheme.skyBlue)
-                .frame(width: 28, height: 28)
-                .shadow(color: ContrailTheme.skyBlue.opacity(0.6), radius: 10)
-
-            Image(systemName: "airplane")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(.white)
-                .rotationEffect(.degrees(-45))
+            Circle().stroke(ContrailTheme.glowAmber.opacity(0.4), lineWidth: 2).frame(width: 36, height: 36)
+            Circle().fill(ContrailTheme.glowAmber).frame(width: 22, height: 22)
+                .shadow(color: ContrailTheme.glowAmber.opacity(0.6), radius: 10)
+            Image(systemName: "airplane").font(.system(size: 11, weight: .bold))
+                .foregroundStyle(.black).rotationEffect(.degrees(-45))
         }
     }
 
-    private func destinationPinView(for airport: Airport) -> some View {
+    private func mapDotView(for airport: Airport) -> some View {
         let isSelected = selectedAirport?.id == airport.id
-
         return Button {
             ContrailTheme.haptic(.alignment)
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 selectedAirport = airport
             }
         } label: {
-            ZStack {
-                if isSelected {
-                    Circle()
-                        .fill(ContrailTheme.glowAmber.opacity(0.2))
-                        .frame(width: 32, height: 32)
-                    Circle()
-                        .fill(ContrailTheme.glowAmber)
-                        .frame(width: 18, height: 18)
-                        .shadow(color: ContrailTheme.glowAmber.opacity(0.6), radius: 8)
-                } else {
-                    Circle()
-                        .fill(ContrailTheme.contrailWhite.opacity(0.7))
-                        .frame(width: 7, height: 7)
-                        .shadow(color: ContrailTheme.contrailWhite.opacity(0.3), radius: 3)
-                }
-            }
+            Circle()
+                .fill(isSelected ? ContrailTheme.glowAmber : ContrailTheme.contrailWhite.opacity(0.6))
+                .frame(width: isSelected ? 14 : 6, height: isSelected ? 14 : 6)
+                .shadow(color: (isSelected ? ContrailTheme.glowAmber : ContrailTheme.contrailWhite).opacity(0.4), radius: isSelected ? 8 : 3)
         }
         .buttonStyle(.plain)
     }
 
-    // MARK: - Airport Carousel
+    // MARK: - Time Ruler (FocusFlights-inspired tick marks)
+
+    private var timeRuler: some View {
+        VStack(spacing: 4) {
+            // Tick marks
+            GeometryReader { geo in
+                let totalWidth = geo.size.width - 48 // padding
+                let marks: [(String, Double)] = [
+                    ("30m", 30), ("40m", 40), ("50m", 50),
+                    ("1h 0m", 60), ("1h 10m", 70), ("1h 20m", 80), ("1h 30m", 90),
+                ]
+
+                ZStack(alignment: .leading) {
+                    // Background track
+                    Rectangle()
+                        .fill(ContrailTheme.contrailWhite.opacity(0.08))
+                        .frame(height: 1)
+                        .offset(y: 8)
+
+                    // Tick marks
+                    ForEach(marks, id: \.0) { label, mins in
+                        let frac = (mins - 5) / (240 - 5)
+                        let x = 24 + totalWidth * frac
+
+                        VStack(spacing: 2) {
+                            Rectangle()
+                                .fill(ContrailTheme.contrailWhite.opacity(mins == Double(Int(focusMinutes)) ? 0.8 : 0.2))
+                                .frame(width: 1, height: mins == Double(Int(focusMinutes)) ? 12 : 8)
+
+                            if mins.truncatingRemainder(dividingBy: 30) == 0 || mins == Double(Int(focusMinutes)) {
+                                Text(label)
+                                    .font(.system(size: 8, weight: .medium, design: .monospaced))
+                                    .foregroundStyle(ContrailTheme.contrailWhite.opacity(0.4))
+                            }
+                        }
+                        .position(x: x, y: 14)
+                    }
+                }
+            }
+            .frame(height: 28)
+
+            // Slider (hidden visual, interactive)
+            Slider(value: $focusMinutes, in: 5...240, step: 5)
+                .tint(ContrailTheme.glowAmber)
+                .padding(.horizontal, 24)
+                .frame(height: 20)
+                .onChange(of: focusMinutes) { _, _ in
+                    ContrailTheme.haptic(.alignment)
+                }
+        }
+    }
+
+    // MARK: - Airport Carousel (Black/Yellow Cards)
 
     private var airportCarousel: some View {
         ScrollViewReader { proxy in
@@ -234,9 +242,11 @@ struct MapPickerView: View {
                             .id(airport.id)
                     }
                 }
+                .scrollTargetLayout()
                 .padding(.horizontal, 24)
             }
-            .frame(height: 110)
+            .scrollTargetBehavior(.viewAligned)
+            .frame(height: 80)
             .onChange(of: selectedAirport?.id) { _, newId in
                 if let id = newId {
                     withAnimation(.spring(response: 0.4)) {
@@ -253,11 +263,11 @@ struct MapPickerView: View {
         let distance = FlightCalculator.haversineDistance(from: departure, to: airport)
 
         return Button {
-            ContrailTheme.haptic(.alignment)
+            ContrailTheme.haptic(.levelChange)
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 selectedAirport = airport
             }
-            // Pan camera to show both departure and destination
+            // Pan map
             withAnimation(.easeInOut(duration: 0.6)) {
                 let midLat = (departure.latitude + airport.latitude) / 2
                 let midLon = (departure.longitude + airport.longitude) / 2
@@ -268,95 +278,53 @@ struct MapPickerView: View {
                 ))
             }
         } label: {
-            VStack(alignment: .leading, spacing: 8) {
-                // Top row: IATA + city flag
-                HStack(spacing: 8) {
+            HStack(spacing: 12) {
+                // Yellow IATA badge
+                VStack(spacing: 2) {
+                    Image(systemName: "airplane.departure")
+                        .font(.system(size: 10))
+                        .foregroundStyle(ContrailTheme.glowAmber)
                     Text(airport.iataCode)
-                        .font(.system(size: 20, weight: .bold, design: .monospaced))
-                        .foregroundStyle(isSelected ? ContrailTheme.glowAmber : ContrailTheme.contrailWhite)
+                        .font(.system(size: 18, weight: .black, design: .monospaced))
+                        .foregroundStyle(ContrailTheme.glowAmber)
+                }
+                .frame(width: 50)
 
-                    Spacer()
+                // City + distance
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(airport.municipality.isEmpty ? airport.name : airport.municipality)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(ContrailTheme.contrailWhite)
+                        .lineLimit(1)
 
-                    Text(airport.country)
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    Text(FlightCalculator.formattedDuration(duration))
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
                         .foregroundStyle(ContrailTheme.mutedText)
                 }
-
-                // City name
-                Text(airport.municipality.isEmpty ? airport.name : airport.municipality)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(ContrailTheme.contrailWhite.opacity(0.8))
-                    .lineLimit(1)
-
-                // Stats row: distance + time
-                HStack(spacing: 12) {
-                    Label(String(format: "%.0f km", distance), systemImage: "ruler")
-                    Label(FlightCalculator.formattedDuration(duration), systemImage: "clock")
-                }
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(ContrailTheme.skyBlue)
             }
-            .frame(width: 150)
-            .padding(14)
-            .background(.ultraThinMaterial.opacity(isSelected ? 0.7 : 0.4))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .frame(minWidth: 140)
             .background(
-                isSelected ? ContrailTheme.glowAmber.opacity(0.08) : ContrailTheme.surfaceNavy.opacity(0.5)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.black)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .stroke(
-                        isSelected ? ContrailTheme.glowAmber.opacity(0.3) : ContrailTheme.contrailWhite.opacity(0.06),
-                        lineWidth: isSelected ? 1.5 : 1
+                        isSelected ? ContrailTheme.glowAmber : ContrailTheme.glowAmber.opacity(0.25),
+                        lineWidth: isSelected ? 2 : 1
                     )
             )
-            .shadow(color: isSelected ? ContrailTheme.glowAmber.opacity(0.15) : .black.opacity(0.15), radius: 8, y: 2)
-            .scaleEffect(isSelected ? 1.04 : 1.0)
+            .shadow(color: isSelected ? ContrailTheme.glowAmber.opacity(0.3) : .black.opacity(0.3), radius: isSelected ? 10 : 4, y: 2)
+            .scaleEffect(isSelected ? 1.06 : 1.0)
         }
         .buttonStyle(.plain)
     }
 
-    // MARK: - Time Slider Bar
+    // MARK: - Book Flight Button
 
-    private var timeSliderBar: some View {
-        HStack(spacing: 14) {
-            Image(systemName: "timer")
-                .font(.system(size: 13))
-                .foregroundStyle(ContrailTheme.skyBlue)
-
-            Text("5m")
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundStyle(ContrailTheme.mutedText)
-
-            Slider(value: $focusMinutes, in: 5...240, step: 5)
-                .tint(ContrailTheme.skyBlue)
-
-            Text("4h")
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundStyle(ContrailTheme.mutedText)
-
-            Text(FlightCalculator.formattedDuration(focusDuration))
-                .font(.system(size: 16, weight: .bold, design: .monospaced))
-                .foregroundStyle(ContrailTheme.contrailWhite)
-                .contentTransition(.numericText())
-                .animation(.easeInOut(duration: 0.15), value: focusMinutes)
-                .frame(width: 60, alignment: .trailing)
-        }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
-        .background(.ultraThinMaterial.opacity(0.7))
-        .background(ContrailTheme.surfaceNavy.opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(ContrailTheme.contrailWhite.opacity(0.06), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.2), radius: 8, y: 2)
-    }
-
-    // MARK: - Start Journey Button
-
-    private var startJourneyButton: some View {
+    private var bookFlightButton: some View {
         Button {
             guard let airport = selectedAirport else { return }
             ContrailTheme.haptic(.levelChange)
@@ -367,31 +335,23 @@ struct MapPickerView: View {
             HStack(spacing: 8) {
                 Image(systemName: "airplane")
                     .rotationEffect(.degrees(-45))
-
-                if let airport = selectedAirport {
-                    Text("Fly to \(airport.iataCode)")
-                        .fontWeight(.semibold)
-                } else {
-                    Text("Select a Destination")
-                        .fontWeight(.semibold)
-                }
+                Text(selectedAirport != nil ? "Book My Flight" : "Select a Destination")
+                    .fontWeight(.semibold)
             }
             .font(.system(size: 15))
             .foregroundStyle(
-                selectedAirport != nil ? ContrailTheme.darkNavy : ContrailTheme.mutedText
+                selectedAirport != nil ? .black : ContrailTheme.mutedText
             )
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
             .background(
                 selectedAirport != nil
-                    ? AnyShapeStyle(ContrailTheme.contrailWhite)
+                    ? AnyShapeStyle(ContrailTheme.glowAmber)
                     : AnyShapeStyle(ContrailTheme.surfaceNavy)
             )
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .shadow(
-                color: selectedAirport != nil
-                    ? ContrailTheme.contrailWhite.opacity(0.2)
-                    : Color.clear,
+                color: selectedAirport != nil ? ContrailTheme.glowAmber.opacity(0.3) : .clear,
                 radius: 12, y: 4
             )
         }

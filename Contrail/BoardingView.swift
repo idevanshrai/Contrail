@@ -5,24 +5,89 @@
 
 import SwiftUI
 
-/// Animated boarding sequence before the focus session begins.
-/// Three phases: Boarding Pass → Seat Selection → Takeoff Transition.
+/// Aircraft type selection — affects seat layout and fuselage shape.
+enum PlaneType: String, CaseIterable, Identifiable {
+    case jet       = "Jet"
+    case propeller = "Propeller"
+    case concorde  = "Concorde"
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .jet:       return "airplane"
+        case .propeller: return "fan"
+        case .concorde:  return "airplane"
+        }
+    }
+
+    /// Seat columns per side
+    var seatsPerSide: Int {
+        switch self {
+        case .jet:       return 3  // A B C | D E F
+        case .propeller: return 2  // A B | C D
+        case .concorde:  return 2  // A B | C D (narrow body)
+        }
+    }
+
+    var seatRows: Int {
+        switch self {
+        case .jet:       return 6
+        case .propeller: return 5
+        case .concorde:  return 7
+        }
+    }
+
+    var leftColumns: [String] {
+        switch self {
+        case .jet:       return ["A", "B", "C"]
+        case .propeller: return ["A", "B"]
+        case .concorde:  return ["A", "B"]
+        }
+    }
+
+    var rightColumns: [String] {
+        switch self {
+        case .jet:       return ["D", "E", "F"]
+        case .propeller: return ["C", "D"]
+        case .concorde:  return ["C", "D"]
+        }
+    }
+
+    /// Fun fact for easter egg
+    var funFact: String {
+        switch self {
+        case .jet:       return "✈ Boeing 737: The best-selling commercial jet in history"
+        case .propeller: return "🛩 The DC-3 could fly coast-to-coast in just 15 hours"
+        case .concorde:  return "🦅 Concorde cruised at Mach 2.04 — faster than a rifle bullet"
+        }
+    }
+
+    /// Fuselage width multiplier
+    var bodyWidth: CGFloat {
+        switch self {
+        case .jet:       return 280
+        case .propeller: return 220
+        case .concorde:  return 200
+        }
+    }
+}
+
+/// Animated boarding sequence: Plane Type → Boarding Pass → Seat Selection → Takeoff.
 struct BoardingView: View {
 
     let sessionInfo: ActiveSessionInfo
     var onBoardingComplete: () -> Void
 
-    @State private var phase: BoardingPhase = .boardingPass
+    @State private var phase: BoardingPhase = .planeSelect
+    @State private var selectedPlane: PlaneType = .jet
     @State private var boardingPassVisible = false
     @State private var seatGridVisible = false
     @State private var selectedSeat: String? = nil
-    @State private var takeoffVisible = false
     @State private var passElementsVisible = false
+    @State private var showFunFact = false
 
-    private let seatRows = ["A", "B", "C", "D", "E", "F"]
-    private let seatColumns = 1...6
-
-    // Random gate and flight number for immersion
+    // Random gate and flight number
     private var gate: String {
         let gates = ["A1", "A3", "B7", "C2", "D4", "E9", "F12", "G5"]
         let idx = abs(sessionInfo.departure.iataCode.hashValue) % gates.count
@@ -34,20 +99,45 @@ struct BoardingView: View {
         return "CT\(num)"
     }
 
+    /// Easter egg: special messages for certain routes
+    private var routeEasterEgg: String? {
+        let route = "\(sessionInfo.departure.iataCode)-\(sessionInfo.destination.iataCode)"
+        let eggs: [String: String] = [
+            // Famous routes
+            "JFK-LAX": "🌴 The transcontinental classic",
+            "LAX-JFK": "🗽 Eastbound & down",
+            "LHR-JFK": "🇬🇧→🇺🇸 The pond hop!",
+            "JFK-LHR": "🇺🇸→🇬🇧 Mind the gap!",
+            "DXB-LHR": "🏜→🌧 From sand to rain",
+            "SFO-NRT": "🌊 Pacific crossing — 11 hours of ocean",
+            "SIN-LHR": "🦁 The Kangaroo Route's northern cousin",
+            "CDG-JFK": "🥐→🗽 Très magnifique!",
+            // Easter eggs for Indian airports
+            "DEL-BOM": "🇮🇳 The busiest air corridor in India!",
+            "BOM-DEL": "🇮🇳 The busiest air corridor in India!",
+            "DEL-BLR": "🖥 Silicon Valley Express",
+            "BLR-DEL": "🖥 Silicon Valley Express",
+        ]
+        return eggs[route]
+    }
+
     var body: some View {
         ZStack {
             ContrailTheme.darkNavy.ignoresSafeArea()
-
-            // Ambient glow
-            ContrailTheme.ambientGlow
-                .opacity(0.3)
-                .ignoresSafeArea()
+            ContrailTheme.ambientGlow.opacity(0.3).ignoresSafeArea()
 
             switch phase {
+            case .planeSelect:
+                planeSelectView
+                    .transition(.asymmetric(
+                        insertion: .opacity,
+                        removal: .scale(scale: 0.9).combined(with: .opacity)
+                    ))
+
             case .boardingPass:
                 boardingPassView
                     .transition(.asymmetric(
-                        insertion: .move(edge: .bottom).combined(with: .opacity),
+                        insertion: .move(edge: .trailing).combined(with: .opacity),
                         removal: .scale(scale: 0.9).combined(with: .opacity)
                     ))
 
@@ -63,14 +153,115 @@ struct BoardingView: View {
                     .transition(.opacity)
             }
         }
-        .onAppear {
-            withAnimation(.spring(response: 0.8, dampingFraction: 0.7).delay(0.2)) {
-                boardingPassVisible = true
+    }
+
+    // MARK: - Phase 0: Plane Type Selection
+
+    private var planeSelectView: some View {
+        VStack(spacing: 32) {
+            Text("CHOOSE YOUR AIRCRAFT")
+                .font(.system(size: 11, weight: .bold))
+                .tracking(3)
+                .foregroundStyle(ContrailTheme.mutedText)
+
+            HStack(spacing: 16) {
+                ForEach(PlaneType.allCases) { plane in
+                    planeTypeCard(plane)
+                }
             }
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.6)) {
-                passElementsVisible = true
+
+            // Fun fact
+            if showFunFact {
+                Text(selectedPlane.funFact)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(ContrailTheme.glowAmber.opacity(0.8))
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 8)
+                    .background(ContrailTheme.glowAmber.opacity(0.08))
+                    .clipShape(Capsule())
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
+
+            Button {
+                ContrailTheme.haptic(.levelChange)
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                    phase = .boardingPass
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    withAnimation(.spring(response: 0.8, dampingFraction: 0.7).delay(0.2)) {
+                        boardingPassVisible = true
+                    }
+                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.6)) {
+                        passElementsVisible = true
+                    }
+                }
+            } label: {
+                Text("Continue →")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 12)
+                    .background(ContrailTheme.glowAmber)
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
         }
+        .padding(40)
+    }
+
+    private func planeTypeCard(_ plane: PlaneType) -> some View {
+        let isSelected = selectedPlane == plane
+
+        return Button {
+            ContrailTheme.haptic(.alignment)
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                selectedPlane = plane
+            }
+            withAnimation(.easeInOut(duration: 0.3).delay(0.1)) {
+                showFunFact = true
+            }
+        } label: {
+            VStack(spacing: 12) {
+                // Plane silhouette (stylized)
+                ZStack {
+                    if plane == .concorde {
+                        // Distinctive delta wing shape
+                        Image(systemName: "airplane")
+                            .font(.system(size: 36, weight: .ultraLight))
+                            .foregroundStyle(isSelected ? ContrailTheme.glowAmber : ContrailTheme.mutedText)
+                            .scaleEffect(x: 0.8, y: 1.2)
+                    } else if plane == .propeller {
+                        Image(systemName: "fan")
+                            .font(.system(size: 36, weight: .ultraLight))
+                            .foregroundStyle(isSelected ? ContrailTheme.glowAmber : ContrailTheme.mutedText)
+                    } else {
+                        Image(systemName: "airplane")
+                            .font(.system(size: 36, weight: .ultraLight))
+                            .foregroundStyle(isSelected ? ContrailTheme.glowAmber : ContrailTheme.mutedText)
+                    }
+                }
+                .frame(height: 44)
+
+                Text(plane.rawValue)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(isSelected ? ContrailTheme.contrailWhite : ContrailTheme.mutedText)
+
+                Text("\(plane.leftColumns.count + plane.rightColumns.count)-abreast")
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(ContrailTheme.mutedText.opacity(0.6))
+            }
+            .frame(width: 120, height: 120)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(isSelected ? ContrailTheme.glowAmber.opacity(0.1) : ContrailTheme.surfaceNavy)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(isSelected ? ContrailTheme.glowAmber.opacity(0.4) : ContrailTheme.contrailWhite.opacity(0.06), lineWidth: isSelected ? 1.5 : 1)
+            )
+            .scaleEffect(isSelected ? 1.05 : 1.0)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Phase 1: Boarding Pass
@@ -83,45 +274,31 @@ struct BoardingView: View {
                 .foregroundStyle(ContrailTheme.mutedText)
                 .opacity(passElementsVisible ? 1 : 0)
 
-            // The boarding pass card
             VStack(spacing: 0) {
-                // Top section — route
+                // Top: route
                 HStack(spacing: 0) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("FROM")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(ContrailTheme.mutedText)
+                        Text("FROM").font(.system(size: 9, weight: .bold)).foregroundStyle(ContrailTheme.mutedText)
                         Text(sessionInfo.departure.iataCode)
                             .font(.system(size: 36, weight: .bold, design: .monospaced))
                             .foregroundStyle(ContrailTheme.darkNavy)
                         Text(sessionInfo.departure.municipality)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(ContrailTheme.mutedText)
+                            .font(.system(size: 12, weight: .medium)).foregroundStyle(ContrailTheme.mutedText)
                     }
-
                     Spacer()
-
                     VStack(spacing: 6) {
-                        Image(systemName: "airplane")
-                            .font(.system(size: 20))
-                            .foregroundStyle(ContrailTheme.skyBlue)
+                        Image(systemName: "airplane").font(.system(size: 20)).foregroundStyle(ContrailTheme.skyBlue)
                         Text(FlightCalculator.formattedDuration(sessionInfo.duration))
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
-                            .foregroundStyle(ContrailTheme.mutedText)
+                            .font(.system(size: 10, weight: .medium, design: .monospaced)).foregroundStyle(ContrailTheme.mutedText)
                     }
-
                     Spacer()
-
                     VStack(alignment: .trailing, spacing: 4) {
-                        Text("TO")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(ContrailTheme.mutedText)
+                        Text("TO").font(.system(size: 9, weight: .bold)).foregroundStyle(ContrailTheme.mutedText)
                         Text(sessionInfo.destination.iataCode)
                             .font(.system(size: 36, weight: .bold, design: .monospaced))
                             .foregroundStyle(ContrailTheme.darkNavy)
                         Text(sessionInfo.destination.municipality)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(ContrailTheme.mutedText)
+                            .font(.system(size: 12, weight: .medium)).foregroundStyle(ContrailTheme.mutedText)
                     }
                 }
                 .padding(28)
@@ -129,42 +306,41 @@ struct BoardingView: View {
 
                 // Perforated divider
                 HStack(spacing: 0) {
-                    Circle()
-                        .fill(ContrailTheme.darkNavy)
-                        .frame(width: 20, height: 20)
-                        .offset(x: -10)
-
+                    Circle().fill(ContrailTheme.darkNavy).frame(width: 20, height: 20).offset(x: -10)
                     Spacer()
-
                     ForEach(0..<20, id: \.self) { _ in
-                        Circle()
-                            .fill(Color.gray.opacity(0.3))
-                            .frame(width: 4, height: 4)
+                        Circle().fill(Color.gray.opacity(0.3)).frame(width: 4, height: 4)
                         Spacer()
                     }
-
-                    Circle()
-                        .fill(ContrailTheme.darkNavy)
-                        .frame(width: 20, height: 20)
-                        .offset(x: 10)
+                    Circle().fill(ContrailTheme.darkNavy).frame(width: 20, height: 20).offset(x: 10)
                 }
                 .frame(height: 20)
                 .background(ContrailTheme.contrailWhite)
 
-                // Bottom section — details
+                // Details
                 HStack {
                     detailColumn(label: "FLIGHT", value: flightNumber)
                     Spacer()
                     detailColumn(label: "GATE", value: gate)
                     Spacer()
-                    detailColumn(label: "DATE", value: Date.now.formatted(.dateTime.month(.abbreviated).day()))
+                    detailColumn(label: "AIRCRAFT", value: selectedPlane.rawValue.uppercased())
                     Spacer()
                     detailColumn(label: "SEAT", value: selectedSeat ?? "--")
                 }
                 .padding(24)
                 .background(ContrailTheme.contrailWhite)
 
-                // Barcode strip
+                // Route easter egg
+                if let egg = routeEasterEgg {
+                    Text(egg)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(ContrailTheme.mutedText)
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity)
+                        .background(ContrailTheme.contrailWhite)
+                }
+
+                // Barcode
                 HStack(spacing: 1) {
                     ForEach(0..<50, id: \.self) { i in
                         Rectangle()
@@ -183,7 +359,6 @@ struct BoardingView: View {
             .scaleEffect(boardingPassVisible ? 1 : 0.85)
             .opacity(boardingPassVisible ? 1 : 0)
 
-            // Proceed button
             Button {
                 ContrailTheme.haptic(.levelChange)
                 withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
@@ -197,18 +372,13 @@ struct BoardingView: View {
             } label: {
                 Text("Select Your Seat →")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(ContrailTheme.contrailWhite)
+                    .foregroundStyle(.black)
                     .padding(.horizontal, 28)
                     .padding(.vertical, 12)
-                    .background(.ultraThinMaterial.opacity(0.5))
-                    .background(ContrailTheme.surfaceNavy)
+                    .background(ContrailTheme.glowAmber)
                     .clipShape(Capsule())
-                    .overlay(
-                        Capsule().stroke(ContrailTheme.contrailWhite.opacity(0.1), lineWidth: 1)
-                    )
             }
             .buttonStyle(.plain)
-            .hoverGlow()
             .opacity(passElementsVisible ? 1 : 0)
         }
         .padding(40)
@@ -216,111 +386,113 @@ struct BoardingView: View {
 
     private func detailColumn(label: String, value: String) -> some View {
         VStack(spacing: 4) {
-            Text(label)
-                .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(ContrailTheme.mutedText)
-            Text(value)
-                .font(.system(size: 16, weight: .bold, design: .monospaced))
-                .foregroundStyle(ContrailTheme.darkNavy)
+            Text(label).font(.system(size: 9, weight: .bold)).foregroundStyle(ContrailTheme.mutedText)
+            Text(value).font(.system(size: 16, weight: .bold, design: .monospaced)).foregroundStyle(ContrailTheme.darkNavy)
         }
     }
 
-    // MARK: - Phase 2: Seat Selection
+    // MARK: - Phase 2: Seat Selection (Fuselage)
 
     private var seatSelectionView: some View {
-        VStack(spacing: 28) {
+        VStack(spacing: 24) {
             Text("CHOOSE YOUR SEAT")
                 .font(.system(size: 11, weight: .bold))
                 .tracking(3)
                 .foregroundStyle(ContrailTheme.mutedText)
 
-            // Aircraft cabin cross-section
-            VStack(spacing: 6) {
-                // Window indicators
-                HStack(spacing: 0) {
-                    Text("Window")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundStyle(ContrailTheme.mutedText)
-                    Spacer()
-                    Text("Aisle")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundStyle(ContrailTheme.mutedText)
-                    Spacer()
-                    Text("Window")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundStyle(ContrailTheme.mutedText)
-                }
-                .padding(.horizontal, 20)
+            // Airplane fuselage
+            ZStack {
+                // Fuselage body
+                FuselageShape()
+                    .fill(ContrailTheme.surfaceNavy)
+                    .frame(width: selectedPlane.bodyWidth, height: CGFloat(selectedPlane.seatRows * 55 + 120))
+                    .overlay(
+                        FuselageShape()
+                            .stroke(ContrailTheme.contrailWhite.opacity(0.08), lineWidth: 1.5)
+                    )
 
-                ForEach(Array(seatColumns), id: \.self) { col in
-                    HStack(spacing: 8) {
-                        // Left side (A, B, C)
-                        ForEach(["A", "B", "C"], id: \.self) { row in
-                            seatButton(row: row, col: col)
+                // Seat grid inside fuselage
+                VStack(spacing: 6) {
+                    // Column headers
+                    HStack(spacing: 0) {
+                        ForEach(selectedPlane.leftColumns, id: \.self) { col in
+                            Text(col)
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .foregroundStyle(ContrailTheme.mutedText)
+                                .frame(width: 36)
                         }
+                        Spacer().frame(width: 30) // aisle
+                        ForEach(selectedPlane.rightColumns, id: \.self) { col in
+                            Text(col)
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .foregroundStyle(ContrailTheme.mutedText)
+                                .frame(width: 36)
+                        }
+                    }
 
-                        // Aisle
-                        Text("\(col)")
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
-                            .foregroundStyle(ContrailTheme.mutedText.opacity(0.5))
-                            .frame(width: 24)
+                    // Rows
+                    ForEach(1...selectedPlane.seatRows, id: \.self) { row in
+                        HStack(spacing: 0) {
+                            ForEach(selectedPlane.leftColumns, id: \.self) { col in
+                                seatButton(row: row, col: col)
+                            }
 
-                        // Right side (D, E, F)
-                        ForEach(["D", "E", "F"], id: \.self) { row in
-                            seatButton(row: row, col: col)
+                            // Row number (aisle)
+                            Text(String(format: "%02d", row))
+                                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                .foregroundStyle(ContrailTheme.mutedText.opacity(0.4))
+                                .frame(width: 30)
+
+                            ForEach(selectedPlane.rightColumns, id: \.self) { col in
+                                seatButton(row: row, col: col)
+                            }
                         }
                     }
                 }
+                .padding(.top, 50)
             }
-            .padding(24)
-            .background(.ultraThinMaterial.opacity(0.4))
-            .background(ContrailTheme.surfaceNavy.opacity(0.6))
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(ContrailTheme.contrailWhite.opacity(0.06), lineWidth: 1)
-            )
-            .frame(maxWidth: 360)
             .scaleEffect(seatGridVisible ? 1 : 0.9)
             .opacity(seatGridVisible ? 1 : 0)
 
-            if selectedSeat != nil {
-                Button {
-                    ContrailTheme.haptic(.levelChange)
-                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                        phase = .takeoff
+            if let seat = selectedSeat {
+                VStack(spacing: 8) {
+                    Text("Seat \(seat)")
+                        .font(.system(size: 14, weight: .bold, design: .monospaced))
+                        .foregroundStyle(ContrailTheme.glowAmber)
+
+                    Button {
+                        ContrailTheme.haptic(.levelChange)
+                        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                            phase = .takeoff
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                            onBoardingComplete()
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "airplane").rotationEffect(.degrees(-45))
+                            Text("Board Flight")
+                        }
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 32)
+                        .padding(.vertical, 14)
+                        .background(ContrailTheme.glowAmber)
+                        .clipShape(Capsule())
+                        .shadow(color: ContrailTheme.glowAmber.opacity(0.3), radius: 12, y: 4)
                     }
-                    // Auto-complete boarding after brief takeoff moment
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-                        onBoardingComplete()
-                    }
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "airplane")
-                            .rotationEffect(.degrees(-45))
-                        Text("Board Flight")
-                    }
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(ContrailTheme.darkNavy)
-                    .padding(.horizontal, 32)
-                    .padding(.vertical, 14)
-                    .background(ContrailTheme.contrailWhite)
-                    .clipShape(Capsule())
-                    .shadow(color: ContrailTheme.contrailWhite.opacity(0.2), radius: 12, y: 4)
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
-                .hoverGlow(ContrailTheme.contrailWhite)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .padding(40)
     }
 
-    private func seatButton(row: String, col: Int) -> some View {
-        let seatId = "\(col)\(row)"
+    private func seatButton(row: Int, col: String) -> some View {
+        let seatId = "\(row)\(col)"
         let isSelected = selectedSeat == seatId
-        // Some seats are "taken" (deterministic hash)
-        let isTaken = abs((row + String(col)).hashValue) % 3 == 0
+        let isTaken = abs((col + String(row)).hashValue) % 3 == 0
 
         return Button {
             guard !isTaken else { return }
@@ -332,20 +504,22 @@ struct BoardingView: View {
             RoundedRectangle(cornerRadius: 4, style: .continuous)
                 .fill(
                     isSelected ? ContrailTheme.glowAmber :
-                    isTaken ? ContrailTheme.mutedText.opacity(0.2) :
-                    ContrailTheme.contrailWhite.opacity(0.08)
+                    isTaken ? ContrailTheme.mutedText.opacity(0.15) :
+                    ContrailTheme.contrailWhite.opacity(0.06)
                 )
-                .frame(width: 36, height: 36)
+                .frame(width: 32, height: 32)
                 .overlay(
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
                         .stroke(
                             isSelected ? ContrailTheme.glowAmber.opacity(0.6) :
-                            ContrailTheme.contrailWhite.opacity(0.06),
+                            isTaken ? Color.clear :
+                            ContrailTheme.contrailWhite.opacity(0.04),
                             lineWidth: 1
                         )
                 )
                 .shadow(color: isSelected ? ContrailTheme.glowAmber.opacity(0.4) : .clear, radius: 6)
-                .scaleEffect(isSelected ? 1.1 : 1.0)
+                .scaleEffect(isSelected ? 1.12 : 1.0)
+                .padding(2)
         }
         .buttonStyle(.plain)
         .disabled(isTaken)
@@ -357,7 +531,6 @@ struct BoardingView: View {
         VStack(spacing: 24) {
             Spacer()
 
-            // Seatbelt icon
             Image(systemName: "seatbelt")
                 .font(.system(size: 48, weight: .ultraLight))
                 .foregroundStyle(ContrailTheme.glowAmber)
@@ -371,7 +544,6 @@ struct BoardingView: View {
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(ContrailTheme.mutedText)
 
-            // Flight info
             HStack(spacing: 20) {
                 Text(sessionInfo.departure.iataCode)
                     .font(.system(size: 20, weight: .bold, design: .monospaced))
@@ -382,11 +554,16 @@ struct BoardingView: View {
                     .font(.system(size: 20, weight: .bold, design: .monospaced))
                     .foregroundStyle(ContrailTheme.contrailWhite)
             }
-            .padding(.top, 8)
+
+            // Easter egg: aviator quote
+            Text("\"The engine is the heart of an airplane, but the pilot is its soul.\"")
+                .font(.system(size: 10, weight: .medium, design: .serif))
+                .foregroundStyle(ContrailTheme.mutedText.opacity(0.4))
+                .italic()
+                .padding(.top, 16)
 
             Spacer()
 
-            // Status bar
             ProgressView()
                 .progressViewStyle(.linear)
                 .tint(ContrailTheme.glowAmber)
@@ -396,9 +573,45 @@ struct BoardingView: View {
     }
 }
 
-// MARK: - Boarding Phase
+// MARK: - Fuselage Shape
+
+/// Custom shape that draws an airplane fuselage outline — rounded nose, tapered tail.
+struct FuselageShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let w = rect.width
+        let h = rect.height
+        let noseRadius = w * 0.5
+        let tailTaper = w * 0.15
+
+        // Start from bottom-left of tail
+        path.move(to: CGPoint(x: tailTaper, y: h))
+
+        // Left side going up
+        path.addLine(to: CGPoint(x: 0, y: noseRadius + 20))
+
+        // Nose (rounded top)
+        path.addQuadCurve(
+            to: CGPoint(x: w, y: noseRadius + 20),
+            control: CGPoint(x: w / 2, y: 0)
+        )
+
+        // Right side going down
+        path.addLine(to: CGPoint(x: w - tailTaper, y: h))
+
+        // Tail bottom
+        path.addQuadCurve(
+            to: CGPoint(x: tailTaper, y: h),
+            control: CGPoint(x: w / 2, y: h - 10)
+        )
+
+        path.closeSubpath()
+        return path
+    }
+}
 
 enum BoardingPhase {
+    case planeSelect
     case boardingPass
     case seatSelection
     case takeoff
