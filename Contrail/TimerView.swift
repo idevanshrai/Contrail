@@ -8,7 +8,7 @@ import SwiftData
 import MapKit
 
 /// Active focus session — zoomed camera following the airplane along the route,
-/// with distance/time remaining at the bottom, press-and-hold exit, sound picker.
+/// distance/time remaining at bottom, press-and-hold exit, sound picker.
 struct TimerView: View {
 
     let sessionInfo: ActiveSessionInfo
@@ -24,12 +24,12 @@ struct TimerView: View {
     @State private var isComplete = false
     @State private var timer: Timer?
 
-    // Flight map state
+    // Flight
     @State private var cameraPosition: MapCameraPosition = .automatic
     @State private var airplaneCoord: CLLocationCoordinate2D
     @State private var airplaneHeading: Double = 0
 
-    // Press-and-hold exit
+    // Exit
     @State private var holdProgress: Double = 0
     @State private var isHolding = false
     @State private var holdTimer: Timer?
@@ -39,8 +39,6 @@ struct TimerView: View {
     @State private var landingAnnounced = false
     @State private var hasSpooledDown = false
     @State private var showSoundPicker = false
-
-    // Easter egg
     @State private var showEasterEgg = false
     @State private var easterEggMessage = ""
 
@@ -80,114 +78,90 @@ struct TimerView: View {
 
     var body: some View {
         ZStack {
-            // Live flight map (full bleed, zoomed on plane)
-            flightMapView
-                .ignoresSafeArea()
+            // Full-bleed satellite map
+            flightMapView.ignoresSafeArea()
 
-            // Top overlay: route + controls
+            // Top controls
             VStack(spacing: 0) {
-                topBar
-                    .padding(.top, 16)
-                    .padding(.horizontal, 20)
-
+                topBar.padding(.top, 16).padding(.horizontal, 20)
                 Spacer()
-
-                // Bottom: distance + time remaining
-                bottomInfoBar
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 16)
+                bottomInfoBar.padding(.horizontal, 20).padding(.bottom, 16)
             }
 
-            // Landing announcement
+            // Overlays
             if soundManager.showLandingMessage {
-                landingAnnouncementOverlay
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                landingBanner.transition(.move(edge: .top).combined(with: .opacity))
             }
-
-            // Exit confirmation
-            if showExitConfirmation {
-                exitConfirmationOverlay
-                    .transition(.opacity)
-            }
-
-            // Sound picker
-            if showSoundPicker {
-                soundPickerOverlay
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-
-            // Easter egg toast
-            if showEasterEgg {
-                easterEggToast
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
-
-            // Arrived
-            if isComplete {
-                arrivedOverlay
-                    .transition(.scale.combined(with: .opacity))
-            }
+            if showExitConfirmation { exitDialog.transition(.opacity) }
+            if showSoundPicker { soundPicker.transition(.move(edge: .bottom).combined(with: .opacity)) }
+            if showEasterEgg { easterEggBanner.transition(.move(edge: .top).combined(with: .opacity)) }
+            if isComplete { arrivedOverlay.transition(.scale.combined(with: .opacity)) }
         }
         .onAppear { startSession() }
         .onDisappear { cleanup() }
     }
 
-    // MARK: - Flight Map (Zoomed, Following Plane)
+    // MARK: - Map
 
     private var flightMapView: some View {
         Map(position: $cameraPosition) {
-            // Full flight path
-            MapPolyline(coordinates: flightPathCoordinates)
-                .stroke(ContrailTheme.glowAmber.opacity(0.3), lineWidth: 2)
+            // Full path (faded)
+            MapPolyline(coordinates: flightPath)
+                .stroke(ContrailTheme.glowAmber.opacity(0.25), lineWidth: 2)
 
-            // Completed path (brighter)
-            let completedCoords = Array(flightPathCoordinates.prefix(max(1, Int(Double(flightPathCoordinates.count) * progress))))
-            MapPolyline(coordinates: completedCoords)
+            // Completed path (bright)
+            MapPolyline(coordinates: Array(flightPath.prefix(max(1, Int(Double(flightPath.count) * progress)))))
                 .stroke(ContrailTheme.glowAmber, lineWidth: 3)
 
-            // Departure marker
+            // Departure dot
             Annotation("", coordinate: CLLocationCoordinate2D(
                 latitude: sessionInfo.departure.latitude, longitude: sessionInfo.departure.longitude
             )) {
-                Circle().fill(ContrailTheme.skyBlue).frame(width: 10, height: 10)
-                    .shadow(color: ContrailTheme.skyBlue.opacity(0.5), radius: 4)
+                ZStack {
+                    Circle().fill(ContrailTheme.skyBlue.opacity(0.2)).frame(width: 20, height: 20)
+                    Circle().fill(ContrailTheme.skyBlue).frame(width: 8, height: 8)
+                }
             }
 
-            // Destination marker
+            // Destination dot
             Annotation("", coordinate: CLLocationCoordinate2D(
                 latitude: sessionInfo.destination.latitude, longitude: sessionInfo.destination.longitude
             )) {
                 ZStack {
-                    Circle().stroke(ContrailTheme.glowAmber, lineWidth: 2).frame(width: 14, height: 14)
-                    Circle().fill(ContrailTheme.glowAmber.opacity(0.3)).frame(width: 10, height: 10)
+                    Circle().stroke(ContrailTheme.glowAmber, lineWidth: 2).frame(width: 16, height: 16)
+                    Circle().fill(ContrailTheme.glowAmber.opacity(0.3)).frame(width: 8, height: 8)
                 }
-                .shadow(color: ContrailTheme.glowAmber.opacity(0.5), radius: 4)
             }
 
-            // Airplane (follows route, rotated to heading)
+            // Airplane
             Annotation("", coordinate: airplaneCoord) {
-                Image(systemName: "airplane")
-                    .font(.system(size: 24, weight: .medium))
-                    .foregroundStyle(ContrailTheme.glowAmber)
-                    .rotationEffect(.degrees(airplaneHeading - 90))
-                    .shadow(color: ContrailTheme.glowAmber.opacity(0.6), radius: 8)
+                ZStack {
+                    // Glow behind plane
+                    Circle()
+                        .fill(ContrailTheme.glowAmber.opacity(0.15))
+                        .frame(width: 40, height: 40)
+                        .blur(radius: 8)
+
+                    Image(systemName: "airplane.circle.fill")
+                        .font(.system(size: 28))
+                        .foregroundStyle(ContrailTheme.glowAmber)
+                        .rotationEffect(.degrees(airplaneHeading - 90))
+                        .shadow(color: ContrailTheme.glowAmber.opacity(0.5), radius: 10)
+                }
             }
         }
         .mapStyle(.imagery(elevation: .realistic))
         .mapControls { }
     }
 
-    private var flightPathCoordinates: [CLLocationCoordinate2D] {
+    // Great-circle path
+    private var flightPath: [CLLocationCoordinate2D] {
         let steps = 100
         let lat1 = sessionInfo.departure.latitude * .pi / 180
         let lon1 = sessionInfo.departure.longitude * .pi / 180
         let lat2 = sessionInfo.destination.latitude * .pi / 180
         let lon2 = sessionInfo.destination.longitude * .pi / 180
-
-        let d = 2 * asin(sqrt(
-            pow(sin((lat2 - lat1) / 2), 2) +
-            cos(lat1) * cos(lat2) * pow(sin((lon2 - lon1) / 2), 2)
-        ))
+        let d = 2 * asin(sqrt(pow(sin((lat2 - lat1) / 2), 2) + cos(lat1) * cos(lat2) * pow(sin((lon2 - lon1) / 2), 2)))
         guard d > 0 else { return [] }
 
         return (0...steps).map { i in
@@ -197,112 +171,102 @@ struct TimerView: View {
             let x = A * cos(lat1) * cos(lon1) + B * cos(lat2) * cos(lon2)
             let y = A * cos(lat1) * sin(lon1) + B * cos(lat2) * sin(lon2)
             let z = A * sin(lat1) + B * sin(lat2)
-            let lat = atan2(z, sqrt(x * x + y * y)) * 180 / .pi
-            let lon = atan2(y, x) * 180 / .pi
-            return CLLocationCoordinate2D(latitude: lat, longitude: lon)
+            return CLLocationCoordinate2D(latitude: atan2(z, sqrt(x*x + y*y)) * 180 / .pi, longitude: atan2(y, x) * 180 / .pi)
         }
     }
 
-    private func currentBearing() -> Double {
-        let coords = flightPathCoordinates
+    private func bearing() -> Double {
+        let coords = flightPath
         let idx = min(Int(Double(coords.count - 1) * progress), coords.count - 2)
         guard idx >= 0, idx + 1 < coords.count else { return 0 }
         let from = coords[idx], to = coords[idx + 1]
         let dLon = (to.longitude - from.longitude) * .pi / 180
-        let lat1 = from.latitude * .pi / 180
-        let lat2 = to.latitude * .pi / 180
-        let y = sin(dLon) * cos(lat2)
-        let x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon)
+        let y = sin(dLon) * cos(to.latitude * .pi / 180)
+        let x = cos(from.latitude * .pi / 180) * sin(to.latitude * .pi / 180) - sin(from.latitude * .pi / 180) * cos(to.latitude * .pi / 180) * cos(dLon)
         return atan2(y, x) * 180 / .pi
     }
 
     // MARK: - Top Bar
 
     private var topBar: some View {
-        HStack(spacing: 12) {
-            // Pause/play
+        HStack(spacing: 10) {
+            // Pause/Play
             Button {
                 ContrailTheme.haptic()
                 if isPaused { resumeTimer() } else { pauseTimer() }
             } label: {
                 Image(systemName: isPaused ? "play.fill" : "pause.fill")
-                    .font(.system(size: 14))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(ContrailTheme.contrailWhite)
-                    .frame(width: 36, height: 36)
-                    .background(.ultraThinMaterial.opacity(0.5))
-                    .background(ContrailTheme.darkNavy.opacity(0.4))
+                    .frame(width: 38, height: 38)
+                    .background(ContrailTheme.cardBlack.opacity(0.9))
                     .clipShape(Circle())
-            }
-            .buttonStyle(.plain)
+                    .overlay(Circle().stroke(ContrailTheme.contrailWhite.opacity(0.08), lineWidth: 1))
+            }.buttonStyle(.plain)
 
-            // Sound button
+            // Sound
             Button {
                 ContrailTheme.haptic(.alignment)
                 withAnimation(.spring(response: 0.3)) { showSoundPicker.toggle() }
             } label: {
                 Image(systemName: soundManager.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                    .font(.system(size: 12))
-                    .foregroundStyle(ContrailTheme.contrailWhite)
-                    .frame(width: 36, height: 36)
-                    .background(.ultraThinMaterial.opacity(0.5))
-                    .background(ContrailTheme.darkNavy.opacity(0.4))
+                    .font(.system(size: 11))
+                    .foregroundStyle(soundManager.isMuted ? ContrailTheme.dangerRed : ContrailTheme.contrailWhite)
+                    .frame(width: 38, height: 38)
+                    .background(ContrailTheme.cardBlack.opacity(0.9))
                     .clipShape(Circle())
-            }
-            .buttonStyle(.plain)
+                    .overlay(Circle().stroke(ContrailTheme.contrailWhite.opacity(0.08), lineWidth: 1))
+            }.buttonStyle(.plain)
 
             Spacer()
 
-            // Route label
+            // Route
             HStack(spacing: 8) {
                 Text(sessionInfo.departure.iataCode)
-                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                    .font(.system(size: 13, weight: .bold, design: .monospaced))
                 Image(systemName: "arrow.right")
-                    .font(.system(size: 10))
-                    .foregroundStyle(ContrailTheme.glowAmber)
+                    .font(.system(size: 9)).foregroundStyle(ContrailTheme.glowAmber)
                 Text(sessionInfo.destination.iataCode)
-                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                    .font(.system(size: 13, weight: .bold, design: .monospaced))
             }
             .foregroundStyle(ContrailTheme.contrailWhite)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(.ultraThinMaterial.opacity(0.5))
-            .background(ContrailTheme.darkNavy.opacity(0.4))
+            .padding(.horizontal, 16).padding(.vertical, 9)
+            .background(ContrailTheme.cardBlack.opacity(0.9))
             .clipShape(Capsule())
+            .overlay(Capsule().stroke(ContrailTheme.contrailWhite.opacity(0.08), lineWidth: 1))
 
             Spacer()
 
-            // Press-and-hold end
+            // End Flight (press-and-hold)
             if !isComplete {
-                pressAndHoldButton
+                endFlightButton
             } else {
                 Button {
                     ContrailTheme.haptic(.levelChange)
                     onComplete()
                 } label: {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(ContrailTheme.arrivedGreen)
-                        .frame(width: 36, height: 36)
-                        .background(.ultraThinMaterial.opacity(0.5))
+                        .frame(width: 38, height: 38)
                         .background(ContrailTheme.arrivedGreen.opacity(0.15))
                         .clipShape(Circle())
-                }
-                .buttonStyle(.plain)
+                        .overlay(Circle().stroke(ContrailTheme.arrivedGreen.opacity(0.2), lineWidth: 1))
+                }.buttonStyle(.plain)
             }
         }
     }
 
-    // MARK: - Bottom Info Bar (Time + Distance Remaining)
+    // MARK: - Bottom Info Bar (Solid, Readable)
 
     private var bottomInfoBar: some View {
         HStack(spacing: 0) {
-            // Time remaining
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text("Time Remaining")
-                    .font(.system(size: 10, weight: .medium))
+                    .font(ContrailTheme.labelFont)
                     .foregroundStyle(ContrailTheme.mutedText)
                 Text(FlightCalculator.countdownString(remainingTime))
-                    .font(.system(size: 22, weight: .bold, design: .monospaced))
+                    .font(.system(size: 24, weight: .bold, design: .monospaced))
                     .foregroundStyle(ContrailTheme.contrailWhite)
                     .contentTransition(.numericText())
                     .animation(.linear(duration: 0.1), value: remainingTime)
@@ -310,95 +274,101 @@ struct TimerView: View {
 
             Spacer()
 
-            // Phase indicator
+            // Phase pill
             Text(flightPhase.label)
-                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
                 .foregroundStyle(flightPhase.color)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(flightPhase.color.opacity(0.1))
+                .padding(.horizontal, 12).padding(.vertical, 5)
+                .background(flightPhase.color.opacity(0.12))
                 .clipShape(Capsule())
-                .animation(.easeInOut(duration: 0.5), value: flightPhase)
 
             Spacer()
 
-            // Distance remaining
-            VStack(alignment: .trailing, spacing: 2) {
+            VStack(alignment: .trailing, spacing: 3) {
                 Text("Distance Remaining")
-                    .font(.system(size: 10, weight: .medium))
+                    .font(ContrailTheme.labelFont)
                     .foregroundStyle(ContrailTheme.mutedText)
                 Text(String(format: "%.0f km", distanceRemaining))
-                    .font(.system(size: 22, weight: .bold, design: .monospaced))
+                    .font(.system(size: 24, weight: .bold, design: .monospaced))
                     .foregroundStyle(ContrailTheme.contrailWhite)
                     .contentTransition(.numericText())
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-        .background(.ultraThinMaterial.opacity(0.6))
-        .background(ContrailTheme.darkNavy.opacity(0.4))
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.horizontal, 24)
+        .padding(.vertical, 16)
+        .background(ContrailTheme.cardBlack.opacity(0.92))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(ContrailTheme.contrailWhite.opacity(0.04), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(ContrailTheme.contrailWhite.opacity(0.06), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.3), radius: 8)
+        .shadow(color: .black.opacity(0.5), radius: 12, y: 4)
     }
 
-    // MARK: - Press-and-Hold
+    // MARK: - Press-and-Hold End Flight
 
-    private var pressAndHoldButton: some View {
+    private var endFlightButton: some View {
         ZStack {
+            // Background
             Circle()
-                .stroke(ContrailTheme.contrailWhite.opacity(0.08), lineWidth: 3)
-                .frame(width: 36, height: 36)
+                .fill(ContrailTheme.cardBlack.opacity(0.9))
+                .frame(width: 38, height: 38)
+                .overlay(Circle().stroke(ContrailTheme.contrailWhite.opacity(0.08), lineWidth: 1))
+
+            // Progress ring
             Circle()
                 .trim(from: 0, to: holdProgress)
                 .stroke(ContrailTheme.dangerRed, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                .frame(width: 36, height: 36)
+                .frame(width: 38, height: 38)
                 .rotationEffect(.degrees(-90))
-                .animation(.linear(duration: 0.05), value: holdProgress)
+
             Image(systemName: "xmark")
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(holdProgress > 0 ? ContrailTheme.dangerRed : ContrailTheme.mutedText)
         }
-        .background(.ultraThinMaterial.opacity(0.5))
-        .background(ContrailTheme.darkNavy.opacity(0.4))
-        .clipShape(Circle())
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in if !isHolding { startHolding() } }
-                .onEnded { _ in stopHolding() }
-        )
+        .onLongPressGesture(minimumDuration: 3.0, pressing: { pressing in
+            if pressing {
+                startHold()
+            } else {
+                cancelHold()
+            }
+        }, perform: {
+            // Completed the full hold
+            ContrailTheme.haptic(.generic)
+            withAnimation(.spring(response: 0.4)) { showExitConfirmation = true }
+            holdProgress = 0
+        })
     }
 
-    private func startHolding() {
-        isHolding = true; holdProgress = 0
+    private func startHold() {
+        isHolding = true
+        holdProgress = 0
         ContrailTheme.haptic(.alignment)
-        let steps = 60; let interval = 3.0 / Double(steps); var step = 0
-        holdTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
+
+        holdTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { _ in
             DispatchQueue.main.async {
-                step += 1; holdProgress = Double(step) / Double(steps)
-                if step == steps / 3 || step == (steps * 2) / 3 { ContrailTheme.haptic(.levelChange) }
-                if step >= steps {
-                    holdTimer?.invalidate(); holdTimer = nil; isHolding = false
-                    ContrailTheme.haptic(.generic)
-                    withAnimation(.spring(response: 0.4)) { showExitConfirmation = true }
+                holdProgress = min(1.0, holdProgress + (0.05 / 3.0))
+
+                // Haptic pulses at 33% and 66%
+                if abs(holdProgress - 0.33) < 0.02 || abs(holdProgress - 0.66) < 0.02 {
+                    ContrailTheme.haptic(.levelChange)
                 }
             }
         }
     }
 
-    private func stopHolding() {
-        isHolding = false; holdTimer?.invalidate(); holdTimer = nil
+    private func cancelHold() {
+        isHolding = false
+        holdTimer?.invalidate()
+        holdTimer = nil
         withAnimation(.easeOut(duration: 0.3)) { holdProgress = 0 }
     }
 
     // MARK: - Exit Confirmation
 
-    private var exitConfirmationOverlay: some View {
+    private var exitDialog: some View {
         ZStack {
-            Color.black.opacity(0.6).ignoresSafeArea()
+            Color.black.opacity(0.65).ignoresSafeArea()
                 .onTapGesture { withAnimation { showExitConfirmation = false } }
 
             VStack(spacing: 20) {
@@ -407,22 +377,18 @@ struct TimerView: View {
                     .foregroundStyle(ContrailTheme.glowAmber)
 
                 Text("End Flight?")
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
                     .foregroundStyle(ContrailTheme.contrailWhite)
 
                 Text("You're \(Int(progress * 100))% through your flight.\nYour focus streak will be broken.")
-                    .font(.system(size: 13)).foregroundStyle(ContrailTheme.mutedText)
+                    .font(.system(size: 13, design: .rounded))
+                    .foregroundStyle(ContrailTheme.mutedText)
                     .multilineTextAlignment(.center).lineSpacing(4)
 
-                // Easter egg: different messages based on progress
                 if progress > 0.8 {
-                    Text("🏆 You're almost there! Don't give up!")
-                        .font(.system(size: 11, weight: .medium))
+                    Text("🏆 Almost there — don't give up!")
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
                         .foregroundStyle(ContrailTheme.glowAmber)
-                } else if progress > 0.5 {
-                    Text("✈ Past the point of no return...")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(ContrailTheme.mutedText.opacity(0.6))
                 }
 
                 HStack(spacing: 14) {
@@ -431,78 +397,71 @@ struct TimerView: View {
                         withAnimation { showExitConfirmation = false }
                     } label: {
                         Text("Keep Flying")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
                             .foregroundStyle(.black)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
+                            .frame(maxWidth: .infinity).padding(.vertical, 12)
                             .background(ContrailTheme.glowAmber)
                             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
+                    }.buttonStyle(.plain)
 
                     Button {
                         ContrailTheme.haptic(.levelChange)
-                        showExitConfirmation = false; endSession()
+                        showExitConfirmation = false
+                        endSession()
                     } label: {
                         Text("End Flight")
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.system(size: 14, weight: .medium, design: .rounded))
                             .foregroundStyle(ContrailTheme.dangerRed)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
+                            .frame(maxWidth: .infinity).padding(.vertical, 12)
                             .background(ContrailTheme.dangerRed.opacity(0.12))
                             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .stroke(ContrailTheme.dangerRed.opacity(0.2), lineWidth: 1)
-                            )
-                    }
-                    .buttonStyle(.plain)
+                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(ContrailTheme.dangerRed.opacity(0.2), lineWidth: 1))
+                    }.buttonStyle(.plain)
                 }
             }
-            .padding(28).frame(maxWidth: 340)
-            .background(.ultraThinMaterial).background(ContrailTheme.surfaceNavy.opacity(0.8))
+            .padding(28).frame(maxWidth: 360)
+            .background(ContrailTheme.cardBlack.opacity(0.95))
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(ContrailTheme.contrailWhite.opacity(0.06), lineWidth: 1))
-            .shadow(color: .black.opacity(0.5), radius: 30)
+            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(ContrailTheme.contrailWhite.opacity(0.06), lineWidth: 1))
+            .shadow(color: .black.opacity(0.6), radius: 30)
         }
     }
 
-    // MARK: - Landing Announcement
+    // MARK: - Landing
 
-    private var landingAnnouncementOverlay: some View {
+    private var landingBanner: some View {
         VStack {
             HStack(spacing: 12) {
                 Image(systemName: "seatbelt").font(.system(size: 16)).foregroundStyle(ContrailTheme.glowAmber)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Preparing for Landing")
-                        .font(.system(size: 13, weight: .semibold)).foregroundStyle(ContrailTheme.contrailWhite)
+                        .font(.system(size: 13, weight: .semibold, design: .rounded)).foregroundStyle(ContrailTheme.contrailWhite)
                     Text("We'll be arriving at \(sessionInfo.destination.iataCode) shortly")
-                        .font(.system(size: 11)).foregroundStyle(ContrailTheme.mutedText)
+                        .font(.system(size: 11, design: .rounded)).foregroundStyle(ContrailTheme.mutedText)
                 }
                 Spacer()
             }
             .padding(16)
-            .background(.ultraThinMaterial.opacity(0.7)).background(ContrailTheme.surfaceNavy.opacity(0.6))
+            .background(ContrailTheme.cardBlack.opacity(0.92))
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(ContrailTheme.glowAmber.opacity(0.15), lineWidth: 1))
-            .shadow(color: .black.opacity(0.3), radius: 10)
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(ContrailTheme.glowAmber.opacity(0.15), lineWidth: 1))
+            .shadow(color: .black.opacity(0.4), radius: 10)
             .padding(.horizontal, 28).padding(.top, 70)
             Spacer()
         }
     }
 
-    // MARK: - Easter Egg Toast
-
-    private var easterEggToast: some View {
+    private var easterEggBanner: some View {
         VStack {
             Spacer()
             Text(easterEggMessage)
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: 11, weight: .medium, design: .rounded))
                 .foregroundStyle(ContrailTheme.glowAmber)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(.ultraThinMaterial.opacity(0.7))
-                .background(ContrailTheme.glowAmber.opacity(0.06))
+                .padding(.horizontal, 16).padding(.vertical, 8)
+                .background(ContrailTheme.cardBlack.opacity(0.9))
                 .clipShape(Capsule())
                 .padding(.bottom, 100)
         }
@@ -514,53 +473,48 @@ struct TimerView: View {
         VStack(spacing: 16) {
             Spacer()
             ZStack {
-                Circle().fill(ContrailTheme.arrivedGreen.opacity(0.15)).frame(width: 120, height: 120)
+                Circle().fill(ContrailTheme.arrivedGreen.opacity(0.12)).frame(width: 120, height: 120)
                     .scaleEffect(isComplete ? 1.5 : 0.5).opacity(isComplete ? 0 : 0.5)
                     .animation(.easeOut(duration: 2).repeatForever(autoreverses: false), value: isComplete)
                 Circle().fill(ContrailTheme.arrivedGreen.opacity(0.2)).frame(width: 80, height: 80)
                 Image(systemName: "checkmark").font(.system(size: 28, weight: .medium)).foregroundStyle(ContrailTheme.arrivedGreen)
             }
             Text("Landed at \(sessionInfo.destination.iataCode)")
-                .font(.system(size: 20, weight: .bold)).foregroundStyle(ContrailTheme.contrailWhite)
+                .font(.system(size: 20, weight: .bold, design: .rounded)).foregroundStyle(ContrailTheme.contrailWhite)
             Text(sessionInfo.destination.municipality)
-                .font(.system(size: 14)).foregroundStyle(ContrailTheme.mutedText)
-
-            // Easter egg: total distance traveled
-            Text("You focused for \(FlightCalculator.formattedDuration(totalDuration)) and traveled \(String(format: "%.0f", distanceTotal)) km ✈")
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: 14, design: .rounded)).foregroundStyle(ContrailTheme.mutedText)
+            Text("✈ \(FlightCalculator.formattedDuration(totalDuration)) · \(String(format: "%.0f", distanceTotal)) km traveled")
+                .font(.system(size: 11, weight: .medium, design: .rounded))
                 .foregroundStyle(ContrailTheme.mutedText.opacity(0.5))
-
             Spacer()
         }
     }
 
     // MARK: - Sound Picker
 
-    private var soundPickerOverlay: some View {
+    private var soundPicker: some View {
         ZStack {
             Color.black.opacity(0.3).ignoresSafeArea()
                 .onTapGesture { withAnimation(.spring(response: 0.3)) { showSoundPicker = false } }
 
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("AMBIENT SOUND").font(.system(size: 10, weight: .bold)).tracking(2).foregroundStyle(ContrailTheme.mutedText)
+                    Text("AMBIENT SOUND")
+                        .font(.system(size: 10, weight: .bold, design: .rounded)).tracking(2)
+                        .foregroundStyle(ContrailTheme.mutedText)
                     Spacer()
                     Button { soundManager.toggleMute() } label: {
                         Image(systemName: soundManager.isMuted ? "speaker.slash" : "speaker.wave.2")
                             .font(.system(size: 13))
-                            .foregroundStyle(soundManager.isMuted ? ContrailTheme.dangerRed : ContrailTheme.skyBlue)
+                            .foregroundStyle(soundManager.isMuted ? ContrailTheme.dangerRed : ContrailTheme.glowAmber)
                     }.buttonStyle(.plain)
                 }
 
-                Text("Engine").font(.system(size: 9, weight: .semibold)).foregroundStyle(ContrailTheme.mutedText.opacity(0.6)).textCase(.uppercase)
-                HStack(spacing: 8) {
-                    ForEach(AmbientSound.allCases.filter(\.isEngineSound)) { sound in soundOption(sound) }
-                }
+                Text("ENGINE").font(.system(size: 9, weight: .bold, design: .rounded)).foregroundStyle(ContrailTheme.mutedText.opacity(0.5))
+                HStack(spacing: 8) { ForEach(AmbientSound.allCases.filter(\.isEngineSound)) { soundOption($0) } }
 
-                Text("Focus").font(.system(size: 9, weight: .semibold)).foregroundStyle(ContrailTheme.mutedText.opacity(0.6)).textCase(.uppercase).padding(.top, 4)
-                HStack(spacing: 8) {
-                    ForEach(AmbientSound.allCases.filter { !$0.isEngineSound }) { sound in soundOption(sound) }
-                }
+                Text("FOCUS").font(.system(size: 9, weight: .bold, design: .rounded)).foregroundStyle(ContrailTheme.mutedText.opacity(0.5)).padding(.top, 4)
+                HStack(spacing: 8) { ForEach(AmbientSound.allCases.filter { !$0.isEngineSound }) { soundOption($0) } }
 
                 HStack(spacing: 10) {
                     Image(systemName: "speaker.fill").font(.system(size: 10)).foregroundStyle(ContrailTheme.mutedText)
@@ -570,10 +524,11 @@ struct TimerView: View {
                 }.padding(.top, 4)
             }
             .padding(20).frame(width: 300)
-            .background(.ultraThinMaterial).background(ContrailTheme.surfaceNavy.opacity(0.8))
+            .background(ContrailTheme.cardBlack.opacity(0.95))
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(ContrailTheme.contrailWhite.opacity(0.06), lineWidth: 1))
-            .shadow(color: .black.opacity(0.4), radius: 20)
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(ContrailTheme.contrailWhite.opacity(0.06), lineWidth: 1))
+            .shadow(color: .black.opacity(0.5), radius: 20)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
             .padding(.leading, 40).padding(.bottom, 80)
         }
@@ -586,13 +541,16 @@ struct TimerView: View {
             soundManager.switchSound(sound)
         } label: {
             VStack(spacing: 6) {
-                Image(systemName: sound.icon).font(.system(size: 16)).foregroundStyle(isActive ? ContrailTheme.glowAmber : ContrailTheme.mutedText)
-                Text(sound.rawValue).font(.system(size: 9, weight: .medium)).foregroundStyle(isActive ? ContrailTheme.contrailWhite : ContrailTheme.mutedText)
+                Image(systemName: sound.icon).font(.system(size: 16))
+                    .foregroundStyle(isActive ? ContrailTheme.glowAmber : ContrailTheme.mutedText)
+                Text(sound.rawValue).font(.system(size: 9, weight: .medium, design: .rounded))
+                    .foregroundStyle(isActive ? ContrailTheme.contrailWhite : ContrailTheme.mutedText)
             }
             .frame(width: 72, height: 56)
-            .background(isActive ? ContrailTheme.glowAmber.opacity(0.12) : ContrailTheme.contrailWhite.opacity(0.04))
+            .background(isActive ? ContrailTheme.glowAmber.opacity(0.1) : ContrailTheme.contrailWhite.opacity(0.03))
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(isActive ? ContrailTheme.glowAmber.opacity(0.3) : .clear, lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(isActive ? ContrailTheme.glowAmber.opacity(0.3) : .clear, lineWidth: 1))
         }.buttonStyle(.plain)
     }
 
@@ -602,51 +560,49 @@ struct TimerView: View {
         isRunning = true
         soundManager.play()
         scheduleTimer()
-        updateCameraToFollowPlane()
-        triggerRandomEasterEgg()
+        updateCameraZoomed()
+        triggerEasterEgg()
     }
 
     private func scheduleTimer() {
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
             DispatchQueue.main.async {
-                if remainingTime > 0 {
-                    remainingTime -= 1
-                    updateAirplanePosition()
-                    checkPhaseTransitions()
-                } else {
-                    completeSession()
-                }
+                guard remainingTime > 0 else { completeSession(); return }
+                remainingTime -= 1
+                updatePlane()
+                checkPhases()
             }
         }
     }
 
-    private func updateAirplanePosition() {
-        let coords = flightPathCoordinates
+    private func updatePlane() {
+        let coords = flightPath
         let idx = min(Int(Double(coords.count - 1) * progress), coords.count - 1)
 
-        withAnimation(.linear(duration: 1)) {
+        // Smooth animation for airplane position
+        withAnimation(.easeInOut(duration: 1.0)) {
             airplaneCoord = coords[idx]
-            airplaneHeading = currentBearing()
+            airplaneHeading = bearing()
         }
 
-        // Update camera every 3 seconds — zoomed & oriented along heading
-        if Int(remainingTime) % 3 == 0 {
-            updateCameraToFollowPlane()
+        // Camera update every 5 seconds for smoothness
+        if Int(remainingTime) % 5 == 0 {
+            updateCameraZoomed()
         }
     }
 
-    private func updateCameraToFollowPlane() {
-        withAnimation(.easeInOut(duration: 2)) {
+    private func updateCameraZoomed() {
+        withAnimation(.easeInOut(duration: 3.0)) {
             cameraPosition = .camera(MapCamera(
                 centerCoordinate: airplaneCoord,
-                distance: 150_000, // ~150km altitude zoom
+                distance: 200_000,
                 heading: airplaneHeading,
-                pitch: 45 // tilted view looking along the route
+                pitch: 50
             ))
         }
     }
 
-    private func checkPhaseTransitions() {
+    private func checkPhases() {
         if flightPhase == .takeoff && progress >= 0.05 && progress < 0.07 {
             soundManager.spoolUp()
             ContrailTheme.haptic(.levelChange)
@@ -663,28 +619,21 @@ struct TimerView: View {
         }
     }
 
-    private func triggerRandomEasterEgg() {
-        // Random aviation facts during the flight
+    private func triggerEasterEgg() {
         let facts = [
-            "🌍 At 35,000ft, you can see about 230 miles in every direction",
-            "✈ Commercial planes fly at ~900 km/h — that's 250 m/s",
-            "☁ Contrails form when exhaust meets -40°C air",
-            "🛫 The busiest airspace in the world is over London",
-            "🌊 70% of flight paths cross over ocean",
-            "⭐ At cruise altitude, you can see 4x more stars",
-            "🔊 The loudest sound on a plane comes from the air conditioning",
+            "🌍 At 35,000ft you can see ~230 miles in every direction",
+            "☁ Contrails form when exhaust hits -40°C air",
+            "✈ Commercial jets cruise at ~900 km/h",
+            "⭐ At cruise altitude you can see 4x more stars",
+            "🔊 The loudest sound on a plane is the AC system",
         ]
-
-        // Show a fact at a random point during the session
         let delay = Double.random(in: 30...max(31, totalDuration * 0.7))
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [self] in
-            guard self.isRunning, !self.isComplete else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            guard isRunning, !isComplete else { return }
             easterEggMessage = facts.randomElement() ?? ""
             withAnimation(.spring(response: 0.4)) { showEasterEgg = true }
             ContrailTheme.haptic(.alignment)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-                withAnimation { showEasterEgg = false }
-            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) { withAnimation { showEasterEgg = false } }
         }
     }
 
@@ -694,38 +643,27 @@ struct TimerView: View {
     private func completeSession() {
         timer?.invalidate(); timer = nil; isRunning = false; soundManager.stop(); remainingTime = 0
         ContrailTheme.haptic(.levelChange)
-
-        withAnimation(.spring(response: 0.6)) {
+        withAnimation(.easeInOut(duration: 1.0)) {
             airplaneCoord = CLLocationCoordinate2D(latitude: sessionInfo.destination.latitude, longitude: sessionInfo.destination.longitude)
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) { isComplete = true }
         }
-
-        let session = Session(
-            departureCode: sessionInfo.departure.iataCode,
-            departureName: sessionInfo.departure.name,
-            destinationCode: sessionInfo.destination.iataCode,
-            destinationName: sessionInfo.destination.name,
+        modelContext.insert(Session(
+            departureCode: sessionInfo.departure.iataCode, departureName: sessionInfo.departure.name,
+            destinationCode: sessionInfo.destination.iataCode, destinationName: sessionInfo.destination.name,
             duration: totalDuration
-        )
-        modelContext.insert(session)
+        ))
     }
 
     private func endSession() { cleanup(); onComplete() }
-
-    private func cleanup() {
-        timer?.invalidate(); timer = nil
-        holdTimer?.invalidate(); holdTimer = nil
-        soundManager.stop()
-    }
+    private func cleanup() { timer?.invalidate(); holdTimer?.invalidate(); soundManager.stop() }
 }
 
 // MARK: - Flight Phase
 
 enum FlightPhase: String, Equatable {
     case boarding, takeoff, cruising, landing, arrived
-
     var label: String {
         switch self {
         case .boarding: return "✈ Boarding"
@@ -735,7 +673,6 @@ enum FlightPhase: String, Equatable {
         case .arrived:  return "✓ Arrived"
         }
     }
-
     var color: Color {
         switch self {
         case .boarding: return ContrailTheme.glowAmber
@@ -748,8 +685,7 @@ enum FlightPhase: String, Equatable {
 }
 
 #Preview {
-    let dep = Airport(id: 1, name: "John F Kennedy Intl", iataCode: "JFK", latitude: 40.6413, longitude: -73.7781, country: "US", municipality: "New York")
-    let dest = Airport(id: 2, name: "Los Angeles Intl", iataCode: "LAX", latitude: 33.9425, longitude: -118.4081, country: "US", municipality: "Los Angeles")
-    let info = ActiveSessionInfo(departure: dep, destination: dest, duration: 120)
-    TimerView(sessionInfo: info) {}
+    let dep = Airport(id: 1, name: "JFK Intl", iataCode: "JFK", latitude: 40.6413, longitude: -73.7781, country: "US", municipality: "New York")
+    let dest = Airport(id: 2, name: "LAX Intl", iataCode: "LAX", latitude: 33.9425, longitude: -118.4081, country: "US", municipality: "Los Angeles")
+    TimerView(sessionInfo: ActiveSessionInfo(departure: dep, destination: dest, duration: 120)) {}
 }

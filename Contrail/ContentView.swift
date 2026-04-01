@@ -62,15 +62,23 @@ struct ContentView: View {
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // App brand
+            // App brand with icon
             HStack(spacing: 10) {
-                Image(systemName: "airplane")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(ContrailTheme.skyBlue)
-                    .rotationEffect(.degrees(-45))
-                Text("Contrail")
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
-                    .foregroundStyle(ContrailTheme.contrailWhite)
+                Image(nsImage: NSApp.applicationIconImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 32, height: 32)
+                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    .shadow(color: ContrailTheme.glowAmber.opacity(0.3), radius: 6)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Contrail")
+                        .font(.system(size: 17, weight: .bold, design: .rounded))
+                        .foregroundStyle(ContrailTheme.contrailWhite)
+                    Text("Focus Timer")
+                        .font(.system(size: 9, weight: .medium, design: .rounded))
+                        .foregroundStyle(ContrailTheme.mutedText)
+                }
             }
             .padding(.horizontal, 20)
             .padding(.top, 20)

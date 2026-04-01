@@ -56,19 +56,29 @@ struct MapPickerView: View {
 
                 Spacer()
 
-                VStack(spacing: 12) {
-                    // Time tick ruler
-                    timeRuler
-                        .padding(.horizontal, 4)
+                VStack(spacing: 0) {
+                    // Solid bottom panel
+                    VStack(spacing: 12) {
+                        // Time slider
+                        timeSlider
+                            .padding(.horizontal, 24)
 
-                    // Airport carousel
-                    airportCarousel
+                        // Airport carousel
+                        airportCarousel
 
-                    // Book button
-                    bookFlightButton
-                        .padding(.horizontal, 24)
+                        // Book button
+                        bookFlightButton
+                            .padding(.horizontal, 24)
+                    }
+                    .padding(.top, 16)
+                    .padding(.bottom, 24)
+                    .background(
+                        LinearGradient(
+                            colors: [ContrailTheme.darkNavy.opacity(0), ContrailTheme.darkNavy.opacity(0.85), ContrailTheme.darkNavy],
+                            startPoint: .top, endPoint: .bottom
+                        )
+                    )
                 }
-                .padding(.bottom, 24)
             }
         }
         .onAppear { updateCamera() }
@@ -179,56 +189,43 @@ struct MapPickerView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - Time Ruler (FocusFlights-inspired tick marks)
+    // MARK: - Time Slider
 
-    private var timeRuler: some View {
-        VStack(spacing: 4) {
-            // Tick marks
-            GeometryReader { geo in
-                let totalWidth = geo.size.width - 48 // padding
-                let marks: [(String, Double)] = [
-                    ("30m", 30), ("40m", 40), ("50m", 50),
-                    ("1h 0m", 60), ("1h 10m", 70), ("1h 20m", 80), ("1h 30m", 90),
-                ]
+    private var timeSlider: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "timer")
+                .font(.system(size: 13))
+                .foregroundStyle(ContrailTheme.glowAmber)
 
-                ZStack(alignment: .leading) {
-                    // Background track
-                    Rectangle()
-                        .fill(ContrailTheme.contrailWhite.opacity(0.08))
-                        .frame(height: 1)
-                        .offset(y: 8)
+            Text("5m")
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundStyle(ContrailTheme.mutedText)
 
-                    // Tick marks
-                    ForEach(marks, id: \.0) { label, mins in
-                        let frac = (mins - 5) / (240 - 5)
-                        let x = 24 + totalWidth * frac
-
-                        VStack(spacing: 2) {
-                            Rectangle()
-                                .fill(ContrailTheme.contrailWhite.opacity(mins == Double(Int(focusMinutes)) ? 0.8 : 0.2))
-                                .frame(width: 1, height: mins == Double(Int(focusMinutes)) ? 12 : 8)
-
-                            if mins.truncatingRemainder(dividingBy: 30) == 0 || mins == Double(Int(focusMinutes)) {
-                                Text(label)
-                                    .font(.system(size: 8, weight: .medium, design: .monospaced))
-                                    .foregroundStyle(ContrailTheme.contrailWhite.opacity(0.4))
-                            }
-                        }
-                        .position(x: x, y: 14)
-                    }
-                }
-            }
-            .frame(height: 28)
-
-            // Slider (hidden visual, interactive)
             Slider(value: $focusMinutes, in: 5...240, step: 5)
                 .tint(ContrailTheme.glowAmber)
-                .padding(.horizontal, 24)
-                .frame(height: 20)
                 .onChange(of: focusMinutes) { _, _ in
                     ContrailTheme.haptic(.alignment)
                 }
+
+            Text("4h")
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundStyle(ContrailTheme.mutedText)
+
+            Text(FlightCalculator.formattedDuration(focusDuration))
+                .font(.system(size: 16, weight: .bold, design: .monospaced))
+                .foregroundStyle(ContrailTheme.glowAmber)
+                .contentTransition(.numericText())
+                .animation(.easeInOut(duration: 0.15), value: focusMinutes)
+                .frame(width: 60, alignment: .trailing)
         }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .background(ContrailTheme.cardBlack.opacity(0.9))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(ContrailTheme.contrailWhite.opacity(0.06), lineWidth: 1)
+        )
     }
 
     // MARK: - Airport Carousel (Black/Yellow Cards)
@@ -246,7 +243,7 @@ struct MapPickerView: View {
                 .padding(.horizontal, 24)
             }
             .scrollTargetBehavior(.viewAligned)
-            .frame(height: 80)
+            .frame(height: 90)
             .onChange(of: selectedAirport?.id) { _, newId in
                 if let id = newId {
                     withAnimation(.spring(response: 0.4)) {
@@ -293,7 +290,7 @@ struct MapPickerView: View {
                 // City + distance
                 VStack(alignment: .leading, spacing: 3) {
                     Text(airport.municipality.isEmpty ? airport.name : airport.municipality)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
                         .foregroundStyle(ContrailTheme.contrailWhite)
                         .lineLimit(1)
 
@@ -338,7 +335,7 @@ struct MapPickerView: View {
                 Text(selectedAirport != nil ? "Book My Flight" : "Select a Destination")
                     .fontWeight(.semibold)
             }
-            .font(.system(size: 15))
+            .font(.system(size: 15, design: .rounded))
             .foregroundStyle(
                 selectedAirport != nil ? .black : ContrailTheme.mutedText
             )
